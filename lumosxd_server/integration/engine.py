@@ -29,12 +29,19 @@ DEFAULT_METHOD = ("bbox", "csr", "cython")
 class AzimuthalEngine:
     """Uses one pyFAI AzimuthalIntegrator for repeated 1D integration."""
 
-    def __init__(self, integrator: AzimuthalIntegrator, npt: int, unit: str = DEFAULT_UNIT) -> None:
+    def __init__(
+        self,
+        integrator: AzimuthalIntegrator,
+        npt: int,
+        unit: str = DEFAULT_UNIT,
+        mask: np.ndarray | None = None,
+    ) -> None:
         if npt < 1:
             raise ValueError(f"npt must be >= 1, got {npt}")
         self._integrator = integrator
         self._npt = npt
         self._unit = unit
+        self._mask = mask
         self._warmed_shape: tuple[int, int] | None = None
 
     @classmethod
@@ -60,13 +67,25 @@ class AzimuthalEngine:
         return self._unit
 
     @property
+    def mask(self) -> np.ndarray | None:
+        return self._mask
+
+    @property
     def warmed_shape(self) -> tuple[int, int] | None:
         return self._warmed_shape
+
+    def set_mask(self, mask: np.ndarray | None) -> None:
+        """Set the integration mask. Clears warmup so sparse tables can be rebuilt."""
+        self._mask = mask
+        self._warmed_shape = None
+        logger.info("Mask updated; warmup cleared")
 
     def warmup(self, shape: tuple[int, int]) -> None:
         """Build sparse integration tables for shape using a zero frame."""
         if len(shape) != 2:
             raise ValueError(f"Expected shape (height, width), got {shape}")
+        if self._mask is not None and self._mask.shape != shape:
+            raise ValueError(f"Mask shape {self._mask.shape} does not match warmup shape {shape}")
 
         height, width = int(shape[0]), int(shape[1])
         logger.info("Warming up integrator for shape=(%s, %s)", height, width)
@@ -77,6 +96,8 @@ class AzimuthalEngine:
         """Integrate a 2D detector frame to a 1D pattern."""
         if image.ndim != 2:
             raise ValueError(f"Expected a 2D image, got shape {image.shape}")
+        if self._mask is not None and self._mask.shape != image.shape:
+            raise ValueError(f"Mask shape {self._mask.shape} does not match image shape {image.shape}")
 
         logger.debug("Integrating frame shape=%s npt=%s unit=%s", image.shape, self._npt, self._unit)
         result = self._integrator.integrate1d(
@@ -84,6 +105,7 @@ class AzimuthalEngine:
             self._npt,
             method=DEFAULT_METHOD,
             unit=self._unit,
+            mask=self._mask,
             polarization_factor=DEFAULT_POLARIZATION_FACTOR,
             correctSolidAngle=True,
         )

@@ -95,3 +95,36 @@ def test_warmup_rejects_invalid_shape(integrator: AzimuthalIntegrator) -> None:
     engine = AzimuthalEngine(integrator, 32)
     with pytest.raises(ValueError, match="shape"):
         engine.warmup((100,))
+
+
+def test_integrate_with_mask(integrator: AzimuthalIntegrator) -> None:
+    shape = (100, 100)
+    image = np.ones(shape, dtype=np.float64)
+    mask = np.zeros(shape, dtype=bool)
+    mask[:, :50] = True
+
+    unmasked = AzimuthalEngine(integrator, 64).integrate(image)
+    masked = AzimuthalEngine(integrator, 64, mask=mask).integrate(image)
+
+    assert masked.radial.shape == unmasked.radial.shape
+    assert masked.intensity.shape == unmasked.intensity.shape
+    assert not np.allclose(masked.intensity, unmasked.intensity)
+
+
+def test_set_mask_clears_warmup(integrator: AzimuthalIntegrator) -> None:
+    engine = AzimuthalEngine(integrator, 64)
+    shape = (100, 100)
+    engine.warmup(shape)
+    assert engine.warmed_shape == shape
+
+    mask = np.zeros(shape, dtype=bool)
+    engine.set_mask(mask)
+    assert engine.mask is mask
+    assert engine.warmed_shape is None
+
+
+def test_integrate_rejects_mask_shape_mismatch(integrator: AzimuthalIntegrator) -> None:
+    mask = np.zeros((50, 50), dtype=bool)
+    engine = AzimuthalEngine(integrator, 32, mask=mask)
+    with pytest.raises(ValueError, match="Mask shape"):
+        engine.integrate(np.ones((100, 100), dtype=np.float64))

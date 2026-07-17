@@ -4,7 +4,7 @@
 
 ![License](https://img.shields.io/badge/License-MIT-teal.svg) ![Python](https://img.shields.io/badge/Python-3.14-22558a.svg?logo=python&color=22558a)
 
-Backend for LumosXD live integrations and real-time pyFAI reduction.
+Backend for LumosXD live integrations using pyFAI.
 
 ## Table of Contents
 - [Contribution](#contributing)

@@ -9,6 +9,7 @@
 # Copyright (c) 2026 Christofanis Skordas, The University of Chicago
 # ----------------------------------------------------------------------------------
 
+from lumosxd_server.integration.engine import AzimuthalEngine
 from lumosxd_server.integration.pattern import Pattern
 
-__all__ = ["Pattern"]
+__all__ = ["AzimuthalEngine", "Pattern"]

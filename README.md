@@ -2,13 +2,41 @@
   &nbsp;LumosXD-Server
 </h1>
 
-![License](https://img.shields.io/badge/License-MIT-teal.svg) ![Python](https://img.shields.io/badge/Python-3.14-22558a.svg?logo=python&color=22558a)
+![License](https://img.shields.io/badge/License-MIT-teal.svg) ![Python](https://img.shields.io/badge/Python-3.13-22558a.svg?logo=python&color=22558a)
 
-Backend for LumosXD live integrations using pyFAI.
+Backend for LumosXD live azimuthal integration using pyFAI.
 
 ## Table of Contents
-- [Contribution](#contributing)
+- [Features](#features)
+- [Setup](#setup)
+- [Usage](#usage)
+- [Tests](#tests)
+- [Contributing](#contributing)
 - [License](#license)
+
+## Features
+- 1D azimuthal integration via `AzimuthalEngine`
+- Multi-frame map stacks via `FrameStack` and `integrate_stack`
+- Optional OpenCL acceleration (falls back to Cython CSR)
+
+## Setup
+```bash
+uv sync --group dev
+```
+
+## Usage
+```python
+from lumosxd_server.integration import AzimuthalEngine
+
+engine = AzimuthalEngine.from_poni("calibration.poni", npt=2000, prefer_opencl=True)
+engine.warmup(image.shape)
+pattern = engine.integrate(image)
+```
+
+## Tests
+```bash
+uv run lumosxd-server -t
+```
 
 ## Contributing
 All contributions to the LumosXD-Server project are welcome! Here are some ways you can help:

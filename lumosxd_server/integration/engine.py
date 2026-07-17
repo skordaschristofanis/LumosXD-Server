@@ -11,11 +11,12 @@
 
 from logging import getLogger
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 import numpy as np
 from pyFAI import load as pyfai_load
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
+from pyFAI.method_registry import IntegrationMethod
 
 from lumosxd_server.integration.pattern import Pattern
 
@@ -24,6 +25,31 @@ logger = getLogger(__name__)
 DEFAULT_UNIT = "2th_deg"
 DEFAULT_POLARIZATION_FACTOR = 0.99
 DEFAULT_METHOD = ("bbox", "csr", "cython")
+OPENCL_METHOD = ("bbox", "csr", "opencl")
+
+
+def _select_method(prefer_opencl: bool) -> Any:
+    """Pick an integration method, preferring OpenCL CSR when requested and available."""
+    if prefer_opencl:
+        opencl_methods = IntegrationMethod.select_method(
+            dim=1,
+            split=OPENCL_METHOD[0],
+            algo=OPENCL_METHOD[1],
+            impl=OPENCL_METHOD[2],
+            degradable=False,
+        )
+        if opencl_methods:
+            logger.info("Using OpenCL CSR integration method")
+            return opencl_methods[0]
+        logger.warning("OpenCL CSR unavailable; falling back to Cython CSR")
+
+    cython_methods = IntegrationMethod.select_method(
+        dim=1,
+        split=DEFAULT_METHOD[0],
+        algo=DEFAULT_METHOD[1],
+        impl=DEFAULT_METHOD[2],
+    )
+    return cython_methods[0]
 
 
 class AzimuthalEngine:
@@ -35,6 +61,7 @@ class AzimuthalEngine:
         npt: int,
         unit: str = DEFAULT_UNIT,
         mask: np.ndarray | None = None,
+        prefer_opencl: bool = False,
     ) -> None:
         if npt < 1:
             raise ValueError(f"npt must be >= 1, got {npt}")
@@ -42,17 +69,25 @@ class AzimuthalEngine:
         self._npt = npt
         self._unit = unit
         self._mask = mask
+        self._prefer_opencl = prefer_opencl
+        self._method = _select_method(prefer_opencl)
         self._warmed_shape: tuple[int, int] | None = None
 
     @classmethod
-    def from_poni(cls, poni_path: str | Path, npt: int, unit: str = DEFAULT_UNIT) -> Self:
+    def from_poni(
+        cls,
+        poni_path: str | Path,
+        npt: int,
+        unit: str = DEFAULT_UNIT,
+        prefer_opencl: bool = False,
+    ) -> Self:
         """Load calibration from a .poni file and build an engine."""
         path = Path(poni_path)
         logger.info("Loading calibration from %s", path)
         loaded = pyfai_load(str(path))
         if not isinstance(loaded, AzimuthalIntegrator):
             raise TypeError(f"Expected AzimuthalIntegrator from {path}, got {type(loaded).__name__}")
-        return cls(loaded, npt, unit)
+        return cls(loaded, npt, unit, prefer_opencl=prefer_opencl)
 
     @property
     def integrator(self) -> AzimuthalIntegrator:
@@ -69,6 +104,14 @@ class AzimuthalEngine:
     @property
     def mask(self) -> np.ndarray | None:
         return self._mask
+
+    @property
+    def prefer_opencl(self) -> bool:
+        return self._prefer_opencl
+
+    @property
+    def method(self) -> Any:
+        return self._method
 
     @property
     def warmed_shape(self) -> tuple[int, int] | None:
@@ -103,7 +146,7 @@ class AzimuthalEngine:
         result = self._integrator.integrate1d(
             image,
             self._npt,
-            method=DEFAULT_METHOD,
+            method=self._method,
             unit=self._unit,
             mask=self._mask,
             polarization_factor=DEFAULT_POLARIZATION_FACTOR,

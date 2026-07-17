@@ -41,6 +41,7 @@ class _WorkerConfig:
     poni_path: str
     npt: int
     unit: str
+    prefer_opencl: bool
     stack_name: str
     stack_shape: tuple[int, int, int]
     stack_dtype: str
@@ -71,7 +72,12 @@ def _init_worker(config: _WorkerConfig) -> None:
             buffer=_WORKER_MASK_SHM.buf,
         )
 
-    engine = AzimuthalEngine.from_poni(config.poni_path, config.npt, config.unit)
+    engine = AzimuthalEngine.from_poni(
+        config.poni_path,
+        config.npt,
+        config.unit,
+        prefer_opencl=config.prefer_opencl,
+    )
     if mask is not None:
         engine.set_mask(mask)
     engine.warmup((_WORKER_STACK.shape[1], _WORKER_STACK.shape[2]))
@@ -91,8 +97,9 @@ def _integrate_serial(
     npt: int,
     unit: str,
     mask: np.ndarray | None,
+    prefer_opencl: bool,
 ) -> list[Pattern]:
-    engine = AzimuthalEngine.from_poni(poni_path, npt, unit)
+    engine = AzimuthalEngine.from_poni(poni_path, npt, unit, prefer_opencl=prefer_opencl)
     if mask is not None:
         engine.set_mask(mask)
     engine.warmup(stack.frame_shape)
@@ -106,6 +113,7 @@ def integrate_stack(
     unit: str = DEFAULT_UNIT,
     mask: np.ndarray | None = None,
     workers: int | None = None,
+    prefer_opencl: bool = False,
 ) -> list[Pattern]:
     """Integrate all frames in stack, optionally in parallel across processes."""
     if mask is not None and mask.shape != stack.frame_shape:
@@ -116,7 +124,7 @@ def integrate_stack(
 
     if n_workers == 1:
         logger.info("Integrating %s frames serially", stack.n_frames)
-        return _integrate_serial(poni_path, stack, npt, unit, mask)
+        return _integrate_serial(poni_path, stack, npt, unit, mask, prefer_opencl)
 
     logger.info("Integrating %s frames with %s workers", stack.n_frames, n_workers)
 
@@ -142,6 +150,7 @@ def integrate_stack(
         poni_path=str(poni_path),
         npt=npt,
         unit=unit,
+        prefer_opencl=prefer_opencl,
         stack_name=stack_shm.name,
         stack_shape=(int(stack_array.shape[0]), int(stack_array.shape[1]), int(stack_array.shape[2])),
         stack_dtype=str(stack_array.dtype),

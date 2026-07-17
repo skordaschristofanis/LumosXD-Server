@@ -128,3 +128,18 @@ def test_integrate_rejects_mask_shape_mismatch(integrator: AzimuthalIntegrator) 
     engine = AzimuthalEngine(integrator, 32, mask=mask)
     with pytest.raises(ValueError, match="Mask shape"):
         engine.integrate(np.ones((100, 100), dtype=np.float64))
+
+
+def test_default_method_is_cython(integrator: AzimuthalIntegrator) -> None:
+    engine = AzimuthalEngine(integrator, 32)
+    assert "cython" in str(engine.method).lower()
+
+
+def test_prefer_opencl_falls_back_or_uses_opencl(integrator: AzimuthalIntegrator) -> None:
+    engine = AzimuthalEngine(integrator, 32, prefer_opencl=True)
+    method_name = str(engine.method).lower()
+    assert "cython" in method_name or "opencl" in method_name
+
+    pattern = engine.integrate(np.ones((64, 64), dtype=np.float64))
+    assert pattern.radial.shape == (32,)
+    assert np.all(np.isfinite(pattern.intensity))

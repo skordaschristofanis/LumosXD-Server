@@ -1,0 +1,32 @@
+# ----------------------------------------------------------------------------------
+# Project: LumosXD-Server
+# File: .gitignore
+# ----------------------------------------------------------------------------------
+# Purpose: 
+# This file is used by Git to determine which files and directories to ignore 
+# when committing changes.
+# ----------------------------------------------------------------------------------
+# Copyright (c) 2026 Christofanis Skordas, The University of Chicago
+# ----------------------------------------------------------------------------------
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Distribution / packaging
+*.egg-info/
+wheels/
+
+# Virtual environments
+.venv/
+
+# OS generated files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*~
+
+# Tools
+.ruff_cache/
+.pytest_cache/

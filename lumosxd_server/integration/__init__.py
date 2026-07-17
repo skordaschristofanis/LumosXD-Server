@@ -10,6 +10,7 @@
 # ----------------------------------------------------------------------------------
 
 from lumosxd_server.integration.engine import AzimuthalEngine
+from lumosxd_server.integration.frame_stack import FrameStack
 from lumosxd_server.integration.pattern import Pattern
 
-__all__ = ["AzimuthalEngine", "Pattern"]
+__all__ = ["AzimuthalEngine", "FrameStack", "Pattern"]

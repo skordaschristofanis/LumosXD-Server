@@ -1,0 +1,85 @@
+# ----------------------------------------------------------------------------------
+# Project: LumosXD-Server
+# File: pyproject.toml
+# ----------------------------------------------------------------------------------
+# Purpose:
+# This file is used to specify the project configuration and dependencies.
+# ----------------------------------------------------------------------------------
+# Copyright (c) 2026 Christofanis Skordas, The University of Chicago
+# ----------------------------------------------------------------------------------
+
+[project]
+name = "lumosxd-server"
+version = "0.0.1"
+authors = [
+    {name = "Christofanis Skordas", email = "skordasc@uchicago.edu"}
+]
+maintainers = [
+    {name = "Christofanis Skordas", email = "skordasc@uchicago.edu"}
+]
+description = "Backend for LumosXD live integrations and real-time pyFAI reduction."
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {file = "LICENSE"}
+classifiers = [
+    "Intended Audience :: Education",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: MIT License",
+]
+requires-python = "==3.13.*"
+dependencies = [
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.15.22",
+    "ty>=0.0.60",
+]
+
+[project.scripts]
+lumosxd-server = "lumosxd_server:main"
+
+[project.urls]
+GitHub = "https://github.com/skordaschristofanis/lumosxd-server"
+GitHub-Issues = "https://github.com/skordaschristofanis/lumosxd-server/issues"
+GitLab = "https://gitlab.com/christofanis.skordas/lumosxd-server"
+GitLab-Issues = "https://gitlab.com/christofanis.skordas/lumosxd-server/-/boards"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["lumosxd_server"]
+
+[tool.ruff]
+exclude = [
+    ".eggs",
+    ".git",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".venv",
+]
+line-length = 160
+indent-width = 4
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = false
+docstring-code-line-length = "dynamic"
+

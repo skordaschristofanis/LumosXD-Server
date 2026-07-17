@@ -35,6 +35,7 @@ class AzimuthalEngine:
         self._integrator = integrator
         self._npt = npt
         self._unit = unit
+        self._warmed_shape: tuple[int, int] | None = None
 
     @classmethod
     def from_poni(cls, poni_path: str | Path, npt: int, unit: str = DEFAULT_UNIT) -> Self:
@@ -57,6 +58,20 @@ class AzimuthalEngine:
     @property
     def unit(self) -> str:
         return self._unit
+
+    @property
+    def warmed_shape(self) -> tuple[int, int] | None:
+        return self._warmed_shape
+
+    def warmup(self, shape: tuple[int, int]) -> None:
+        """Build sparse integration tables for shape using a zero frame."""
+        if len(shape) != 2:
+            raise ValueError(f"Expected shape (height, width), got {shape}")
+
+        height, width = int(shape[0]), int(shape[1])
+        logger.info("Warming up integrator for shape=(%s, %s)", height, width)
+        self.integrate(np.zeros((height, width), dtype=np.float64))
+        self._warmed_shape = (height, width)
 
     def integrate(self, image: np.ndarray) -> Pattern:
         """Integrate a 2D detector frame to a 1D pattern."""

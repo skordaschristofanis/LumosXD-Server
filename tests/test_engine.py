@@ -75,3 +75,23 @@ def test_integrate_rejects_non_2d(integrator: AzimuthalIntegrator) -> None:
     engine = AzimuthalEngine(integrator, 32)
     with pytest.raises(ValueError, match="2D"):
         engine.integrate(np.ones(10, dtype=np.float64))
+
+
+def test_warmup_then_repeated_integrate(integrator: AzimuthalIntegrator) -> None:
+    engine = AzimuthalEngine(integrator, 64)
+    shape = (100, 100)
+    image = np.ones(shape, dtype=np.float64)
+
+    assert engine.warmed_shape is None
+    engine.warmup(shape)
+    assert engine.warmed_shape == shape
+
+    patterns = [engine.integrate(image) for _ in range(5)]
+    assert len(patterns) == 5
+    assert all(pattern.radial.shape == (64,) for pattern in patterns)
+
+
+def test_warmup_rejects_invalid_shape(integrator: AzimuthalIntegrator) -> None:
+    engine = AzimuthalEngine(integrator, 32)
+    with pytest.raises(ValueError, match="shape"):
+        engine.warmup((100,))

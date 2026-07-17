@@ -11,15 +11,16 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
-from lumosxd_server.integration import AzimuthalEngine
+from lumosxd_server.integration import AzimuthalEngine, Pattern
 
 
 @pytest.fixture
-def poni_file(tmp_path: Path) -> Path:
-    ai = AzimuthalIntegrator(
+def integrator() -> AzimuthalIntegrator:
+    return AzimuthalIntegrator(
         dist=0.1,
         poni1=0.05,
         poni2=0.05,
@@ -27,8 +28,12 @@ def poni_file(tmp_path: Path) -> Path:
         pixel2=1e-4,
         wavelength=1.0e-10,
     )
+
+
+@pytest.fixture
+def poni_file(tmp_path: Path, integrator: AzimuthalIntegrator) -> Path:
     path = tmp_path / "calibration.poni"
-    ai.save(str(path))
+    integrator.save(str(path))
     return path
 
 
@@ -50,3 +55,23 @@ def test_from_poni_missing_file(tmp_path: Path) -> None:
     missing = tmp_path / "missing.poni"
     with pytest.raises(Exception):
         AzimuthalEngine.from_poni(missing, npt=128)
+
+
+def test_integrate_returns_pattern(integrator: AzimuthalIntegrator) -> None:
+    engine = AzimuthalEngine(integrator, 64)
+    image = np.ones((100, 100), dtype=np.float64)
+
+    pattern = engine.integrate(image)
+
+    assert isinstance(pattern, Pattern)
+    assert pattern.unit == "2th_deg"
+    assert pattern.radial.shape == (64,)
+    assert pattern.intensity.shape == (64,)
+    assert np.all(np.isfinite(pattern.radial))
+    assert np.all(np.isfinite(pattern.intensity))
+
+
+def test_integrate_rejects_non_2d(integrator: AzimuthalIntegrator) -> None:
+    engine = AzimuthalEngine(integrator, 32)
+    with pytest.raises(ValueError, match="2D"):
+        engine.integrate(np.ones(10, dtype=np.float64))

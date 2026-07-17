@@ -13,12 +13,17 @@ from logging import getLogger
 from pathlib import Path
 from typing import Self
 
+import numpy as np
 from pyFAI import load as pyfai_load
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
+
+from lumosxd_server.integration.pattern import Pattern
 
 logger = getLogger(__name__)
 
 DEFAULT_UNIT = "2th_deg"
+DEFAULT_POLARIZATION_FACTOR = 0.99
+DEFAULT_METHOD = ("bbox", "csr", "cython")
 
 
 class AzimuthalEngine:
@@ -52,3 +57,23 @@ class AzimuthalEngine:
     @property
     def unit(self) -> str:
         return self._unit
+
+    def integrate(self, image: np.ndarray) -> Pattern:
+        """Integrate a 2D detector frame to a 1D pattern."""
+        if image.ndim != 2:
+            raise ValueError(f"Expected a 2D image, got shape {image.shape}")
+
+        logger.debug("Integrating frame shape=%s npt=%s unit=%s", image.shape, self._npt, self._unit)
+        result = self._integrator.integrate1d(
+            image,
+            self._npt,
+            method=DEFAULT_METHOD,
+            unit=self._unit,
+            polarization_factor=DEFAULT_POLARIZATION_FACTOR,
+            correctSolidAngle=True,
+        )
+        return Pattern(
+            radial=np.asarray(result.radial, dtype=np.float64),
+            intensity=np.asarray(result.intensity, dtype=np.float64),
+            unit=self._unit,
+        )

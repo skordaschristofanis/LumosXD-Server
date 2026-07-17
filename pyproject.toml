@@ -30,6 +30,7 @@ classifiers = [
 ]
 requires-python = "==3.13.*"
 dependencies = [
+    "pyfai>=2026.5.0",
 ]
 
 [dependency-groups]

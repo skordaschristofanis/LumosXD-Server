@@ -74,11 +74,13 @@ def test_load_npy_single_frame(tmp_path: Path) -> None:
     p = tmp_path / "frame.npy"
     np.save(p, frame)
 
-    stack = _load_input(p)
+    stack, names, sources = _load_input(p)
 
     assert isinstance(stack, FrameStack)
     assert stack.n_frames == 1
     assert stack.frame_shape == FRAME_SHAPE
+    assert names == ["frame"]
+    assert sources == [p]
     np.testing.assert_allclose(stack[0], frame)
 
 
@@ -87,9 +89,11 @@ def test_load_npy_3d_stack(tmp_path: Path) -> None:
     p = tmp_path / "stack.npy"
     np.save(p, data)
 
-    stack = _load_input(p)
+    stack, names, sources = _load_input(p)
 
     assert stack.n_frames == 3
+    assert names == ["stack_0000", "stack_0001", "stack_0002"]
+    assert sources == [p, p, p]
     np.testing.assert_allclose(stack.data, data)
 
 
@@ -105,10 +109,12 @@ def test_load_tif_single_frame(tmp_path: Path) -> None:
     p = tmp_path / "frame.tif"
     _write_tif(p, frame)
 
-    stack = _load_input(p)
+    stack, names, sources = _load_input(p)
 
     assert stack.n_frames == 1
     assert stack.frame_shape == FRAME_SHAPE
+    assert names == ["frame"]
+    assert sources == [p]
     np.testing.assert_allclose(stack[0], frame.astype(np.float64))
 
 
@@ -116,9 +122,11 @@ def test_load_tif_directory(tmp_path: Path) -> None:
     for i in range(3):
         _write_tif(tmp_path / f"frame_{i:03d}.tif", _make_frame(float(i + 1)))
 
-    stack = _load_input(tmp_path)
+    stack, names, sources = _load_input(tmp_path)
 
     assert stack.n_frames == 3
+    assert names == ["frame_000", "frame_001", "frame_002"]
+    assert all(s.parent == tmp_path for s in sources)
     np.testing.assert_allclose(stack[0].mean(), 1.0)
     np.testing.assert_allclose(stack[1].mean(), 2.0)
     np.testing.assert_allclose(stack[2].mean(), 3.0)
@@ -128,9 +136,10 @@ def test_load_directory_mixes_npy_and_tif(tmp_path: Path) -> None:
     np.save(tmp_path / "aaa.npy", _make_frame(1.0).astype(np.float64))
     _write_tif(tmp_path / "bbb.tif", _make_frame(2.0))
 
-    stack = _load_input(tmp_path)
+    stack, names, sources = _load_input(tmp_path)
 
     assert stack.n_frames == 2
+    assert names == ["aaa", "bbb"]
 
 
 def test_load_directory_skips_unsupported_files(tmp_path: Path) -> None:
@@ -138,9 +147,10 @@ def test_load_directory_skips_unsupported_files(tmp_path: Path) -> None:
     (tmp_path / "Thumbs.db").write_bytes(b"junk")
     (tmp_path / "calibration.poni").write_text("poni_version: 2\n")
 
-    stack = _load_input(tmp_path)
+    stack, names, _ = _load_input(tmp_path)
 
     assert stack.n_frames == 1
+    assert names == ["frame"]
 
 
 def test_load_directory_empty_raises(tmp_path: Path) -> None:
@@ -154,9 +164,11 @@ def test_load_h5_single_2d_dataset(tmp_path: Path) -> None:
     with h5py.File(p, "w") as f:
         f.create_dataset("entry/data", data=frame)
 
-    stack = _load_input(p)
+    stack, names, sources = _load_input(p)
 
     assert stack.n_frames == 1
+    assert names == ["data"]
+    assert sources == [p]
     np.testing.assert_allclose(stack[0], frame)
 
 
@@ -166,9 +178,11 @@ def test_load_h5_3d_dataset(tmp_path: Path) -> None:
     with h5py.File(p, "w") as f:
         f.create_dataset("entry/data", data=data)
 
-    stack = _load_input(p)
+    stack, names, sources = _load_input(p)
 
     assert stack.n_frames == 5
+    assert names == [f"stack_{i:04d}" for i in range(5)]
+    assert sources == [p] * 5
     np.testing.assert_allclose(stack.data, data)
 
 
@@ -179,9 +193,11 @@ def test_load_h5_explicit_dataset_path(tmp_path: Path) -> None:
         f.create_dataset("measurement/detector/frames", data=frame)
         f.create_dataset("measurement/monitor/counts", data=np.array([1.0, 2.0]))
 
-    stack = _load_input(p, h5_dataset="measurement/detector/frames")
+    stack, names, sources = _load_input(p, h5_dataset="measurement/detector/frames")
 
     assert stack.n_frames == 1
+    assert names == ["data"]
+    assert sources == [p]
     np.testing.assert_allclose(stack[0], frame)
 
 
@@ -205,9 +221,12 @@ def test_load_h5_no_image_datasets_raises(tmp_path: Path) -> None:
 
 
 def test_load_h5_in_directory(tmp_path: Path) -> None:
-    with h5py.File(tmp_path / "run.h5", "w") as f:
+    p = tmp_path / "run.h5"
+    with h5py.File(p, "w") as f:
         f.create_dataset("data", data=np.ones((3, 32, 32), dtype=np.float64))
 
-    stack = _load_input(tmp_path)
+    stack, names, sources = _load_input(tmp_path)
 
     assert stack.n_frames == 3
+    assert names == ["run_0000", "run_0001", "run_0002"]
+    assert sources == [p, p, p]

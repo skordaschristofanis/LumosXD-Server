@@ -61,10 +61,13 @@ uv run lumosxd-server data.h5 output.npz --poni calibration.poni --1d --h5-datas
 | `--opencl` | off | Prefer OpenCL GPU integration |
 | `--h5-dataset PATH` | auto | HDF5 internal dataset path |
 | `--npt-azim N` | `360` | Azimuthal bins (`--2d` only) |
+| `--split` | off | Write one result per input frame instead of a single stacked file |
 
 **Output `.npz` keys:**
 - `--1d`: `radial` (1-D), `intensity` (n_frames × npt), `unit`
 - `--2d`: `radial` (1-D), `azimuthal` (1-D), `intensity` (n_frames × npt_azim × npt), `unit`
+
+When `--split` is used, OUTPUT is optional and defaults to the input directory. Each frame is saved next to its source file using the source filename stem (e.g. `D3159_d_001.npz`). HDF5 sources have their results written back into the same `.h5` file under `/integration/1d/` or `/integration/2d/`. Stacked inputs (3D `.npy`, multi-frame `.h5`) use zero-padded indices (e.g. `stack_0000.npz`).
 
 ### Python API
 

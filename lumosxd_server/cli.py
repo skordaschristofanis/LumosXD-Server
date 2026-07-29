@@ -30,6 +30,15 @@ _H5_EXTS = {".h5", ".hdf5", ".nxs", ".nx"}
 _IMAGE_EXTS = {".tif", ".tiff", ".edf", ".cbf", ".mar3450", ".img"}
 _ALL_EXTS = _NPY_EXTS | _H5_EXTS | _IMAGE_EXTS
 
+_RADIAL_AXIS = {
+    "2th_deg": ("two_theta", "degrees"),
+    "2th_rad": ("two_theta", "radians"),
+    "q_nm^-1": ("q", "nm^-1"),
+    "q_A^-1": ("q", "angstrom^-1"),
+    "d_nm":    ("d", "nm"),
+    "d_A":     ("d", "angstrom"),
+}
+
 
 def _calculate_npt(poni_path: Path, frame_shape: tuple[int, int], mode: str) -> int:
     """Calculate radial integration points from beam center to farthest image corner."""
@@ -152,24 +161,62 @@ def _load_mask(path: Path | None) -> np.ndarray | None:
     return mask
 
 
+def _write_h5_nexus(source: Path, group_list: list, mode: str, unit: str) -> None:
+    """Write integration results back into an HDF5 file following the NeXus convention."""
+    axis_name, axis_units = _RADIAL_AXIS.get(unit, ("radial", unit))
+    radial = group_list[0][0].radial
+    intensity = np.stack([r.intensity for r, _, _ in group_list], axis=0)
+    multi_frame = intensity.shape[0] > 1
+
+    with h5py.File(source, "a") as f:
+        entry = f.require_group("entry")
+        entry.attrs["NX_class"] = "NXentry"
+
+        process_name = f"integration_{mode}"
+        if process_name in entry:
+            del entry[process_name]
+        process = entry.create_group(process_name)
+        process.attrs["NX_class"] = "NXprocess"
+        process["program"] = "lumosxd-server"
+
+        nxdata = process.create_group("results")
+        nxdata.attrs["NX_class"] = "NXdata"
+        nxdata.attrs["signal"] = "intensity"
+
+        if mode == "1d":
+            radial_idx = 1 if multi_frame else 0
+            nxdata.attrs["axes"] = [axis_name] if not multi_frame else [".", axis_name]
+            nxdata.attrs[f"{axis_name}_indices"] = [radial_idx]
+            ax = nxdata.create_dataset(axis_name, data=radial)
+            ax.attrs["units"] = axis_units
+            ds = nxdata.create_dataset("intensity", data=intensity if multi_frame else intensity[0])
+            ds.attrs["units"] = "counts"
+        else:
+            azimuthal = group_list[0][0].azimuthal
+            chi_idx, radial_idx = (1, 2) if multi_frame else (0, 1)
+            nxdata.attrs["axes"] = ["chi", axis_name] if not multi_frame else [".", "chi", axis_name]
+            nxdata.attrs["chi_indices"] = [chi_idx]
+            nxdata.attrs[f"{axis_name}_indices"] = [radial_idx]
+            chi = nxdata.create_dataset("chi", data=azimuthal)
+            chi.attrs["units"] = "degrees"
+            ax = nxdata.create_dataset(axis_name, data=radial)
+            ax.attrs["units"] = axis_units
+            ds = nxdata.create_dataset("intensity", data=intensity if multi_frame else intensity[0])
+            ds.attrs["units"] = "counts"
+
+    logger.info("Wrote %d result(s) to %s:/entry/%s", len(group_list), source, process_name)
+
+
 def _save_split(results: list[Pattern | Cake], names: list[str], sources: list[Path], output_dir: Path, mode: str, unit: str) -> None:
     """Save split output: HDF5 sources write back into the same file; others write .npz files."""
     output_dir.mkdir(parents=True, exist_ok=True)
     for source, group in groupby(zip(results, names, sources), key=lambda x: x[2]):
         group_list = list(group)
         if source.suffix.lower() in _H5_EXTS:
-            h5_group = f"integration/{mode}"
-            with h5py.File(source, "a") as f:
-                grp = f.require_group(h5_group)
-                grp["radial"] = group_list[0][0].radial
-                grp["intensity"] = np.stack([r.intensity for r, _, _ in group_list], axis=0)
-                grp["unit"] = unit
-                if mode == "2d":
-                    grp["azimuthal"] = group_list[0][0].azimuthal
-            logger.info("Wrote %d result(s) to %s:/%s", len(group_list), source, h5_group)
+            _write_h5_nexus(source, group_list, mode, unit)
         else:
             for result, name, _ in group_list:
-                out = output_dir / f"{name}.npz"
+                out = output_dir / f"{name}_{mode}.npz"
                 if mode == "1d":
                     np.savez(out, radial=result.radial, intensity=result.intensity, unit=np.bytes_(unit))
                 else:

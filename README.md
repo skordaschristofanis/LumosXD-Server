@@ -67,7 +67,7 @@ uv run lumosxd-server data.h5 output.npz --poni calibration.poni --1d --h5-datas
 - `--1d`: `radial` (1-D), `intensity` (n_frames × npt), `unit`
 - `--2d`: `radial` (1-D), `azimuthal` (1-D), `intensity` (n_frames × npt_azim × npt), `unit`
 
-When `--split` is used, OUTPUT is optional and defaults to the input directory. Each frame is saved next to its source file using the source filename stem (e.g. `D3159_d_001.npz`). HDF5 sources have their results written back into the same `.h5` file under `/integration/1d/` or `/integration/2d/`. Stacked inputs (3D `.npy`, multi-frame `.h5`) use zero-padded indices (e.g. `stack_0000.npz`).
+When `--split` is used, OUTPUT is optional and defaults to the input directory. Each frame is saved next to its source file using the source filename stem and mode suffix (e.g. `D3159_d_001_1d.npz`, `D3159_d_001_2d.npz`), so running both modes into the same directory does not overwrite files. HDF5 sources have their results written back into the same `.h5` file following the NeXus convention under `/entry/integration_1d/results` or `/entry/integration_2d/results` as an `NXprocess`/`NXdata` group with proper `signal`, `axes`, and `units` attributes. Stacked inputs (3D `.npy`, multi-frame `.h5`) use zero-padded indices (e.g. `stack_0000.npz`).
 
 ### Python API
 

@@ -33,19 +33,19 @@ uv sync --group dev
 
 ```bash
 # 1D azimuthal integration of a directory of TIF frames
-uv run lumosxd-server integrate /path/to/frames output.npz --poni calibration.poni --1d
+uv run lumosxd-server /path/to/frames output.npz --poni calibration.poni --1d
 
-# 2D cake integration with custom radial and azimuthal bins
-uv run lumosxd-server integrate /path/to/frames output.npz --poni calibration.poni --2d --npt 2000 --npt-azim 360
+# 2D cake integration with custom azimuthal bins
+uv run lumosxd-server /path/to/frames output.npz --poni calibration.poni --2d --npt-azim 360
 
 # Single frame
-uv run lumosxd-server integrate frame.tif output.npz --poni calibration.poni --1d
+uv run lumosxd-server frame.tif output.npz --poni calibration.poni --1d
 
 # HDF5 file — dataset auto-detected if there is only one 2D/3D dataset
-uv run lumosxd-server integrate data.h5 output.npz --poni calibration.poni --1d
+uv run lumosxd-server data.h5 output.npz --poni calibration.poni --1d
 
 # HDF5 file with explicit dataset path
-uv run lumosxd-server integrate data.h5 output.npz --poni calibration.poni --1d --h5-dataset /entry/data/data
+uv run lumosxd-server data.h5 output.npz --poni calibration.poni --1d --h5-dataset /entry/data/data
 ```
 
 **Options:**
@@ -54,7 +54,7 @@ uv run lumosxd-server integrate data.h5 output.npz --poni calibration.poni --1d 
 |------|---------|-------------|
 | `--1d` / `--2d` | *(required)* | Integration mode |
 | `--poni` | *(required)* | pyFAI calibration `.poni` file |
-| `--npt N` | `1000` | Radial integration points |
+| `--npt N` | auto | Radial points — calculated from beam center to farthest image corner (×1.5 for `--1d`, ×2.0 for `--2d`) |
 | `--unit` | `2th_deg` | Radial unit (`2th_deg`, `2th_rad`, `q_nm^-1`, `q_A^-1`, `d_nm`, `d_A`) |
 | `--mask` | — | 2D boolean `.npy` mask (True = masked out) |
 | `--workers N` | CPU count | Parallel worker processes |

@@ -15,8 +15,9 @@ import fabio.tifimage
 import h5py
 import numpy as np
 import pytest
+from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
-from lumosxd_server.cli import _load_input
+from lumosxd_server.cli import _calculate_npt, _load_input
 from lumosxd_server.integration import FrameStack
 
 
@@ -31,6 +32,41 @@ def _write_tif(path: Path, frame: np.ndarray) -> None:
     img = fabio.tifimage.TifImage(data=frame)
     img.write(str(path))
 
+
+def test_calculate_npt_1d_centered_beam(tmp_path: Path) -> None:
+    ai = AzimuthalIntegrator(dist=0.1, poni1=0.05, poni2=0.05, pixel1=1e-4, pixel2=1e-4, wavelength=1e-10)
+    poni = tmp_path / "cal.poni"
+    ai.save(str(poni))
+
+    npt = _calculate_npt(poni, (1000, 1000), "1d")
+
+    assert 900 < npt < 1200
+
+
+def test_calculate_npt_2d_uses_larger_factor(tmp_path: Path) -> None:
+    ai = AzimuthalIntegrator(dist=0.1, poni1=0.05, poni2=0.05, pixel1=1e-4, pixel2=1e-4, wavelength=1e-10)
+    poni = tmp_path / "cal.poni"
+    ai.save(str(poni))
+
+    npt_1d = _calculate_npt(poni, (1000, 1000), "1d")
+    npt_2d = _calculate_npt(poni, (1000, 1000), "2d")
+
+    assert npt_2d > npt_1d
+
+
+def test_calculate_npt_off_centre_beam(tmp_path: Path) -> None:
+    ai = AzimuthalIntegrator(dist=0.1, poni1=0.01, poni2=0.01, pixel1=1e-4, pixel2=1e-4, wavelength=1e-10)
+    poni = tmp_path / "cal.poni"
+    ai.save(str(poni))
+
+    npt_corner = _calculate_npt(poni, (1000, 1000), "1d")
+
+    ai2 = AzimuthalIntegrator(dist=0.1, poni1=0.05, poni2=0.05, pixel1=1e-4, pixel2=1e-4, wavelength=1e-10)
+    poni2 = tmp_path / "cal2.poni"
+    ai2.save(str(poni2))
+    npt_centre = _calculate_npt(poni2, (1000, 1000), "1d")
+
+    assert npt_corner > npt_centre
 
 
 def test_load_npy_single_frame(tmp_path: Path) -> None:
@@ -175,4 +211,3 @@ def test_load_h5_in_directory(tmp_path: Path) -> None:
     stack = _load_input(tmp_path)
 
     assert stack.n_frames == 3
-

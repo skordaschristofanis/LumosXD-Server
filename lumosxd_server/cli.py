@@ -17,9 +17,27 @@ import fabio
 import h5py
 import numpy as np
 
+from pyFAI.integrator.azimuthal import AzimuthalIntegrator
+
 from lumosxd_server.integration import FrameStack, integrate_cake_stack, integrate_stack
 
 logger = getLogger(__name__)
+
+_NPT_FACTORS = {"1d": 1.5, "2d": 2.0}
+
+
+def _calculate_npt(poni_path: Path, frame_shape: tuple[int, int], mode: str) -> int:
+    """Calculate radial integration points from beam center to farthest image corner."""
+    ai = AzimuthalIntegrator()
+    ai.load(str(poni_path))
+    center_y = ai.poni1 / ai.pixel1
+    center_x = ai.poni2 / ai.pixel2
+    h, w = frame_shape
+    max_dist = max(
+        np.sqrt((r - center_y) ** 2 + (c - center_x) ** 2)
+        for r, c in ((0, 0), (0, w), (h, 0), (h, w))
+    )
+    return int(max_dist * _NPT_FACTORS[mode])
 
 _NPY_EXTS = {".npy"}
 _H5_EXTS = {".h5", ".hdf5", ".nxs", ".nx"}
@@ -142,12 +160,15 @@ def run_integrate(args: Namespace) -> int:
         stack = _load_input(args.input, getattr(args, "h5_dataset", None))
         mask = _load_mask(args.mask)
 
+        npt = args.npt or _calculate_npt(args.poni, stack.frame_shape, args.mode)
+        logger.info("npt=%d (%s)", npt, "manual" if args.npt else "auto")
+
         if args.mode == "1d":
-            logger.info("Integrating (1D) %d frame(s) — npt=%d unit=%s workers=%s", stack.n_frames, args.npt, args.unit, args.workers)
+            logger.info("Integrating (1D) %d frame(s) — npt=%d unit=%s workers=%s", stack.n_frames, npt, args.unit, args.workers)
             patterns = integrate_stack(
                 poni_path=args.poni,
                 stack=stack,
-                npt=args.npt,
+                npt=npt,
                 unit=args.unit,
                 mask=mask,
                 workers=args.workers,
@@ -161,11 +182,11 @@ def run_integrate(args: Namespace) -> int:
             logger.info("Saved %d pattern(s) to %s", len(patterns), output)
 
         else:
-            logger.info("Integrating (2D) %d frame(s) — npt=%d npt_azim=%d unit=%s workers=%s", stack.n_frames, args.npt, args.npt_azim, args.unit, args.workers)
+            logger.info("Integrating (2D) %d frame(s) — npt=%d npt_azim=%d unit=%s workers=%s", stack.n_frames, npt, args.npt_azim, args.unit, args.workers)
             cakes = integrate_cake_stack(
                 poni_path=args.poni,
                 stack=stack,
-                npt=args.npt,
+                npt=npt,
                 npt_azim=args.npt_azim,
                 unit=args.unit,
                 mask=mask,

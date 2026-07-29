@@ -33,7 +33,7 @@ def main() -> None:
     parser.add_argument("input", type=Path, metavar="INPUT", nargs="?", help="Frame file (.npy/.tif/.h5/…) or directory of frames")
     parser.add_argument("output", type=Path, metavar="OUTPUT", nargs="?", help="Output .npz file path")
     parser.add_argument("--poni", type=Path, metavar="PONI", help="pyFAI calibration .poni file")
-    parser.add_argument("--npt", type=int, default=1000, metavar="N", help="Number of radial integration points (default: 1000)")
+    parser.add_argument("--npt", type=int, default=None, metavar="N", help="Number of radial integration points (default: auto from poni and image size)")
     parser.add_argument("--unit", default="2th_deg", choices=_VALID_UNITS, metavar="UNIT", help=f"Radial unit (default: 2th_deg). Choices: {', '.join(_VALID_UNITS)}")
     parser.add_argument("--mask", type=Path, default=None, metavar="MASK", help="Optional 2D boolean mask .npy file (True = masked out)")
     parser.add_argument("--workers", type=int, default=None, metavar="N", help="Worker processes for parallel integration (default: CPU count)")

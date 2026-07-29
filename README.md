@@ -16,8 +16,11 @@ Backend for LumosXD live azimuthal integration using pyFAI.
 
 ## Features
 - 1D azimuthal integration via `AzimuthalEngine`
+- 2D cake integration via `integrate_cake_stack`
 - Multi-frame map stacks via `FrameStack` and `integrate_stack`
+- Parallel frame processing via a process pool
 - Optional OpenCL acceleration (falls back to Cython CSR)
+- Input formats: `.npy`, `.tif`/`.tiff`, `.edf`, `.cbf`, `.h5`/`.hdf5`/`.nxs`
 
 ## Setup
 ```bash
@@ -25,12 +28,57 @@ uv sync --group dev
 ```
 
 ## Usage
-```python
-from lumosxd_server.integration import AzimuthalEngine
 
+### Command-line
+
+```bash
+# 1D azimuthal integration of a directory of TIF frames
+uv run lumosxd-server integrate /path/to/frames output.npz --poni calibration.poni --1d
+
+# 2D cake integration with custom radial and azimuthal bins
+uv run lumosxd-server integrate /path/to/frames output.npz --poni calibration.poni --2d --npt 2000 --npt-azim 360
+
+# Single frame
+uv run lumosxd-server integrate frame.tif output.npz --poni calibration.poni --1d
+
+# HDF5 file — dataset auto-detected if there is only one 2D/3D dataset
+uv run lumosxd-server integrate data.h5 output.npz --poni calibration.poni --1d
+
+# HDF5 file with explicit dataset path
+uv run lumosxd-server integrate data.h5 output.npz --poni calibration.poni --1d --h5-dataset /entry/data/data
+```
+
+**Options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--1d` / `--2d` | *(required)* | Integration mode |
+| `--poni` | *(required)* | pyFAI calibration `.poni` file |
+| `--npt N` | `1000` | Radial integration points |
+| `--unit` | `2th_deg` | Radial unit (`2th_deg`, `2th_rad`, `q_nm^-1`, `q_A^-1`, `d_nm`, `d_A`) |
+| `--mask` | — | 2D boolean `.npy` mask (True = masked out) |
+| `--workers N` | CPU count | Parallel worker processes |
+| `--opencl` | off | Prefer OpenCL GPU integration |
+| `--h5-dataset PATH` | auto | HDF5 internal dataset path |
+| `--npt-azim N` | `360` | Azimuthal bins (`--2d` only) |
+
+**Output `.npz` keys:**
+- `--1d`: `radial` (1-D), `intensity` (n_frames × npt), `unit`
+- `--2d`: `radial` (1-D), `azimuthal` (1-D), `intensity` (n_frames × npt_azim × npt), `unit`
+
+### Python API
+
+```python
+from lumosxd_server.integration import AzimuthalEngine, FrameStack, integrate_stack
+
+# Single frame
 engine = AzimuthalEngine.from_poni("calibration.poni", npt=2000, prefer_opencl=True)
 engine.warmup(image.shape)
 pattern = engine.integrate(image)
+
+# Batch / map stack
+stack = FrameStack(frames_array)   # shape (N, H, W), float64
+patterns = integrate_stack(poni_path="calibration.poni", stack=stack, npt=1000)
 ```
 
 ## Tests

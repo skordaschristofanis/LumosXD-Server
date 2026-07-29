@@ -124,6 +124,18 @@ def _load_mask(path: Path | None) -> np.ndarray | None:
     return mask
 
 
+def run_tests() -> int:
+    """Run the project test suite with pytest. Returns the pytest exit code."""
+    try:
+        import pytest
+    except ImportError:
+        logger.error("pytest is not installed. Install the dev group: uv sync --group dev")
+        return 1
+
+    tests_dir = Path(__file__).resolve().parent.parent / "tests"
+    return pytest.main([str(tests_dir), "-v"])
+
+
 def run_integrate(args: Namespace) -> int:
     """Execute the integrate command. Returns an exit code."""
     try:

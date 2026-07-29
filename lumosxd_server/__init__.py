@@ -14,23 +14,11 @@ from logging import ERROR, INFO, basicConfig, getLogger
 from pathlib import Path
 from sys import exit
 
-from lumosxd_server.cli import run_integrate
+from lumosxd_server.cli import run_integrate, run_tests
 
 logger = getLogger(__name__)
 
 _VALID_UNITS = ("2th_deg", "2th_rad", "q_nm^-1", "q_A^-1", "d_nm", "d_A")
-
-
-def _run_tests() -> int:
-    """Run the project test suite with pytest. Returns the pytest exit code."""
-    try:
-        import pytest
-    except ImportError:
-        logger.error("pytest is not installed. Install the dev group: uv sync --group dev")
-        return 1
-
-    tests_dir = Path(__file__).resolve().parent.parent / "tests"
-    return pytest.main([str(tests_dir), "-v"])
 
 
 def main() -> None:
@@ -60,7 +48,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.test:
-        exit(_run_tests())
+        exit(run_tests())
 
     if args.input is None or args.output is None or args.poni is None or args.mode is None:
         parser.print_help()

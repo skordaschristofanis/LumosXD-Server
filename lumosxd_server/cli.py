@@ -299,7 +299,7 @@ def run_integrate(args: Namespace) -> int:
     try:
         mask = _load_mask(args.mask)
         progress = _progress_callback("1D" if args.mode == "1d" else "2D") if args.verbose else None
-        h5_dataset = getattr(args, "h5_dataset", None)
+        h5_dataset = args.h5_dataset
 
         is_single_h5 = not args.input.is_dir() and args.input.suffix.lower() in _H5_EXTS
 

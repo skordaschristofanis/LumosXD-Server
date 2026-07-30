@@ -62,6 +62,7 @@ uv run lumosxd-server data.h5 output.npz --poni calibration.poni --1d --h5-datas
 | `--h5-dataset PATH` | auto | HDF5 internal dataset path |
 | `--npt-azim N` | `360` | Azimuthal bins (`--2d` only) |
 | `--split` | off | Write one result per input frame instead of a single stacked file |
+| `--verbose` | off | Log per-frame progress during integration |
 
 **Output `.npz` keys:**
 - `--1d`: `radial` (1-D), `intensity` (n_frames × npt), `unit`

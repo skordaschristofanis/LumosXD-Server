@@ -25,7 +25,7 @@ def main() -> None:
     """Main entry point for `lumosxd-server` console script."""
 
     # Configure logging
-    basicConfig(level=INFO, format="%(asctime)s %(levelname)s: %(message)s")
+    basicConfig(level=INFO, format="%(asctime)s %(levelname)s: %(message)s", force=True)
     getLogger("fabio.TiffIO").setLevel(ERROR)
 
     parser = ArgumentParser("lumosxd-server", description="LumosXD-Server — pyFAI integration backend")
@@ -41,6 +41,7 @@ def main() -> None:
     parser.add_argument("--h5-dataset", default=None, metavar="PATH", dest="h5_dataset", help="HDF5 dataset path (auto-detected when omitted)")
     parser.add_argument("--npt-azim", type=int, default=360, metavar="N", dest="npt_azim", help="Number of azimuthal bins for --2d (default: 360)")
     parser.add_argument("--split", action="store_true", help="Write one .npz per input frame into OUTPUT directory instead of a single stacked file")
+    parser.add_argument("--verbose", action="store_true", help="Log per-frame progress during integration")
 
     dim_group = parser.add_mutually_exclusive_group()
     dim_group.add_argument("--1d", dest="mode", action="store_const", const="1d", help="1D azimuthal integration → radial pattern")

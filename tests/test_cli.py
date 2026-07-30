@@ -17,8 +17,9 @@ import numpy as np
 import pytest
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
-from lumosxd_server.cli import _calculate_npt, _load_input
+from lumosxd_server.cli import _calculate_npt, _load_input, _write_h5_nexus
 from lumosxd_server.integration import FrameStack
+from lumosxd_server.integration.pattern import Pattern
 
 
 FRAME_SHAPE = (32, 32)
@@ -230,3 +231,54 @@ def test_load_h5_in_directory(tmp_path: Path) -> None:
     assert stack.n_frames == 3
     assert names == ["run_0000", "run_0001", "run_0002"]
     assert sources == [p, p, p]
+
+
+def _make_patterns(n: int, npt: int = 50) -> list[Pattern]:
+    radial = np.linspace(0, 20, npt, dtype=np.float64)
+    return [Pattern(radial=radial, intensity=np.ones(npt) * i, unit="2th_deg") for i in range(n)]
+
+
+def test_write_h5_nexus_1d_single_frame(tmp_path: Path) -> None:
+    p = tmp_path / "data.h5"
+    with h5py.File(p, "w") as f:
+        f.create_dataset("entry/data/data", data=np.ones((32, 32)))
+
+    patterns = _make_patterns(1)
+    group_list = [(patterns[0], "frame_0000", p)]
+    _write_h5_nexus(p, group_list, "1d", "2th_deg")
+
+    with h5py.File(p, "r") as f:
+        assert "entry/integration_1d/results/intensity" in f
+        assert f["entry/integration_1d/results/intensity"].shape == (50,)
+        assert "entry/integration_1d/results/two_theta" in f
+
+
+def test_write_h5_nexus_1d_multi_frame(tmp_path: Path) -> None:
+    p = tmp_path / "data.h5"
+    with h5py.File(p, "w") as f:
+        f.create_dataset("entry/data/data", data=np.ones((5, 32, 32)))
+
+    patterns = _make_patterns(5)
+    group_list = [(pat, f"frame_{i:04d}", p) for i, pat in enumerate(patterns)]
+    _write_h5_nexus(p, group_list, "1d", "2th_deg")
+
+    with h5py.File(p, "r") as f:
+        assert "entry/integration_1d/results/intensity" in f
+        ds = f["entry/integration_1d/results/intensity"]
+        assert ds.shape == (5, 50)
+        np.testing.assert_allclose(ds[3], np.ones(50) * 3)
+        assert "entry/integration_1d/results/two_theta" in f
+
+
+def test_write_h5_nexus_overwrites_existing_group(tmp_path: Path) -> None:
+    p = tmp_path / "data.h5"
+    with h5py.File(p, "w") as f:
+        f.create_dataset("entry/data/data", data=np.ones((2, 32, 32)))
+
+    patterns = _make_patterns(2)
+    group_list = [(pat, f"frame_{i:04d}", p) for i, pat in enumerate(patterns)]
+    _write_h5_nexus(p, group_list, "1d", "2th_deg")
+    _write_h5_nexus(p, group_list, "1d", "2th_deg")
+
+    with h5py.File(p, "r") as f:
+        assert f["entry/integration_1d/results/intensity"].shape == (2, 50)

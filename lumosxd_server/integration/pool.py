@@ -149,7 +149,7 @@ def _init_h5_worker(config: _H5WorkerConfig) -> None:
 
 
 def _integrate_h5_index(index: int) -> Pattern | Cake:
-    if _H5_WORKER_ENGINE is None or _H5_WORKER_FILE is None:
+    if _H5_WORKER_ENGINE is None or _H5_WORKER_FILE is None or _H5_WORKER_DATASET is None:
         raise RuntimeError("H5 worker not initialized")
     frame = np.asarray(_H5_WORKER_FILE[_H5_WORKER_DATASET][index], dtype=np.float64)
     if _H5_WORKER_DIM == "1d":

@@ -71,23 +71,26 @@ def _find_image_datasets(h5file: h5py.File) -> list[str]:
     return found
 
 
+def _resolve_h5_dataset(f: h5py.File, h5_dataset: str | None, path: Path) -> str:
+    if h5_dataset:
+        return h5_dataset
+    candidates = _find_image_datasets(f)
+    if not candidates:
+        raise ValueError(f"No 2D/3D datasets found in {path}")
+    if len(candidates) > 1:
+        raise ValueError(
+            f"Multiple image datasets in {path}: {candidates}. "
+            "Use --h5-dataset to specify one."
+        )
+    logger.info("Auto-selected dataset '%s' from %s", candidates[0], path)
+    return candidates[0]
+
+
 def _load_h5(path: Path, dataset: str | None) -> tuple[np.ndarray, list[str], list[Path]]:
     """Load frames from an HDF5 file. Auto-detects the dataset when not specified."""
     with h5py.File(path, "r") as f:
-        if dataset:
-            raw = f[dataset][()]
-        else:
-            candidates = _find_image_datasets(f)
-            if not candidates:
-                raise ValueError(f"No 2D/3D datasets found in {path}")
-            if len(candidates) > 1:
-                raise ValueError(
-                    f"Multiple image datasets in {path}: {candidates}. "
-                    "Use --h5-dataset to specify one."
-                )
-            ds_path = candidates[0]
-            logger.info("Auto-selected dataset '%s' from %s", ds_path, path)
-            raw = f[ds_path][()]
+        ds_path = _resolve_h5_dataset(f, dataset, path)
+        raw = f[ds_path][()]
 
     raw = np.asarray(raw, dtype=np.float64)
     if raw.ndim == 2:
@@ -233,19 +236,7 @@ def _get_h5_metadata(
 ) -> tuple[int, tuple[int, int], str, list[str], list[Path]]:
     """Return (n_frames, frame_shape, dataset_path, names, sources) without loading frame data."""
     with h5py.File(path, "r") as f:
-        if h5_dataset:
-            ds_path = h5_dataset
-        else:
-            candidates = _find_image_datasets(f)
-            if not candidates:
-                raise ValueError(f"No 2D/3D datasets found in {path}")
-            if len(candidates) > 1:
-                raise ValueError(
-                    f"Multiple image datasets in {path}: {candidates}. "
-                    "Use --h5-dataset to specify one."
-                )
-            ds_path = candidates[0]
-            logger.info("Auto-selected dataset '%s' from %s", ds_path, path)
+        ds_path = _resolve_h5_dataset(f, h5_dataset, path)
         ds = f[ds_path]
         if ds.ndim == 2:
             frame_shape = (int(ds.shape[0]), int(ds.shape[1]))

@@ -50,6 +50,8 @@ def _select_method(prefer_opencl: bool, dim: int = 1) -> Any:
         algo=DEFAULT_METHOD[1],
         impl=DEFAULT_METHOD[2],
     )
+    if not cython_methods:
+        raise RuntimeError(f"No Cython CSR {dim}D integration method available — check pyFAI installation")
     return cython_methods[0]
 
 

@@ -18,7 +18,6 @@ import pytest
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
 from lumosxd_server.cli import _calculate_npt, _load_input, _write_h5_nexus
-from lumosxd_server.integration import FrameStack
 from lumosxd_server.integration.pattern import Pattern
 
 
@@ -77,9 +76,9 @@ def test_load_npy_single_frame(tmp_path: Path) -> None:
 
     stack, names, sources = _load_input(p)
 
-    assert isinstance(stack, FrameStack)
-    assert stack.n_frames == 1
-    assert stack.frame_shape == FRAME_SHAPE
+    assert isinstance(stack, np.ndarray)
+    assert stack.shape[0] == 1
+    assert stack.shape[1:] == FRAME_SHAPE
     assert names == ["frame"]
     assert sources == [p]
     np.testing.assert_allclose(stack[0], frame)
@@ -92,10 +91,10 @@ def test_load_npy_3d_stack(tmp_path: Path) -> None:
 
     stack, names, sources = _load_input(p)
 
-    assert stack.n_frames == 3
+    assert stack.shape[0] == 3
     assert names == ["stack_0000", "stack_0001", "stack_0002"]
     assert sources == [p, p, p]
-    np.testing.assert_allclose(stack.data, data)
+    np.testing.assert_allclose(stack, data)
 
 
 def test_load_npy_rejects_4d(tmp_path: Path) -> None:
@@ -112,8 +111,8 @@ def test_load_tif_single_frame(tmp_path: Path) -> None:
 
     stack, names, sources = _load_input(p)
 
-    assert stack.n_frames == 1
-    assert stack.frame_shape == FRAME_SHAPE
+    assert stack.shape[0] == 1
+    assert stack.shape[1:] == FRAME_SHAPE
     assert names == ["frame"]
     assert sources == [p]
     np.testing.assert_allclose(stack[0], frame.astype(np.float64))
@@ -125,7 +124,7 @@ def test_load_tif_directory(tmp_path: Path) -> None:
 
     stack, names, sources = _load_input(tmp_path)
 
-    assert stack.n_frames == 3
+    assert stack.shape[0] == 3
     assert names == ["frame_000", "frame_001", "frame_002"]
     assert all(s.parent == tmp_path for s in sources)
     np.testing.assert_allclose(stack[0].mean(), 1.0)
@@ -139,7 +138,7 @@ def test_load_directory_mixes_npy_and_tif(tmp_path: Path) -> None:
 
     stack, names, sources = _load_input(tmp_path)
 
-    assert stack.n_frames == 2
+    assert stack.shape[0] == 2
     assert names == ["aaa", "bbb"]
 
 
@@ -150,7 +149,7 @@ def test_load_directory_skips_unsupported_files(tmp_path: Path) -> None:
 
     stack, names, _ = _load_input(tmp_path)
 
-    assert stack.n_frames == 1
+    assert stack.shape[0] == 1
     assert names == ["frame"]
 
 
@@ -167,7 +166,7 @@ def test_load_h5_single_2d_dataset(tmp_path: Path) -> None:
 
     stack, names, sources = _load_input(p)
 
-    assert stack.n_frames == 1
+    assert stack.shape[0] == 1
     assert names == ["data"]
     assert sources == [p]
     np.testing.assert_allclose(stack[0], frame)
@@ -181,10 +180,10 @@ def test_load_h5_3d_dataset(tmp_path: Path) -> None:
 
     stack, names, sources = _load_input(p)
 
-    assert stack.n_frames == 5
+    assert stack.shape[0] == 5
     assert names == [f"stack_{i:04d}" for i in range(5)]
     assert sources == [p] * 5
-    np.testing.assert_allclose(stack.data, data)
+    np.testing.assert_allclose(stack, data)
 
 
 def test_load_h5_explicit_dataset_path(tmp_path: Path) -> None:
@@ -196,7 +195,7 @@ def test_load_h5_explicit_dataset_path(tmp_path: Path) -> None:
 
     stack, names, sources = _load_input(p, h5_dataset="measurement/detector/frames")
 
-    assert stack.n_frames == 1
+    assert stack.shape[0] == 1
     assert names == ["data"]
     assert sources == [p]
     np.testing.assert_allclose(stack[0], frame)
@@ -228,7 +227,7 @@ def test_load_h5_in_directory(tmp_path: Path) -> None:
 
     stack, names, sources = _load_input(tmp_path)
 
-    assert stack.n_frames == 3
+    assert stack.shape[0] == 3
     assert names == ["run_0000", "run_0001", "run_0002"]
     assert sources == [p, p, p]
 

@@ -22,7 +22,7 @@ import numpy as np
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
 from lumosxd_server.integration import (
-    Cake, FrameStack, Pattern,
+    Cake, Pattern,
     integrate_cake_stack, integrate_h5_cake_stack,
     integrate_h5_stack, integrate_stack,
 )
@@ -71,7 +71,7 @@ def _find_image_datasets(h5file: h5py.File) -> list[str]:
     return found
 
 
-def _load_h5(path: Path, dataset: str | None) -> tuple[FrameStack, list[str], list[Path]]:
+def _load_h5(path: Path, dataset: str | None) -> tuple[np.ndarray, list[str], list[Path]]:
     """Load frames from an HDF5 file. Auto-detects the dataset when not specified."""
     with h5py.File(path, "r") as f:
         if dataset:
@@ -91,10 +91,10 @@ def _load_h5(path: Path, dataset: str | None) -> tuple[FrameStack, list[str], li
 
     raw = np.asarray(raw, dtype=np.float64)
     if raw.ndim == 2:
-        return FrameStack(raw[np.newaxis, ...]), [path.stem], [path]
+        return raw[np.newaxis, ...], [path.stem], [path]
     if raw.ndim == 3:
         n = raw.shape[0]
-        return FrameStack(raw), [f"{path.stem}_{i:04d}" for i in range(n)], [path] * n
+        return raw, [f"{path.stem}_{i:04d}" for i in range(n)], [path] * n
     raise ValueError(f"Dataset has unsupported shape {raw.shape}")
 
 
@@ -105,10 +105,10 @@ def _read_frame(path: Path) -> np.ndarray:
     return fabio.open(str(path)).data
 
 
-def _load_input(path: Path, h5_dataset: str | None = None) -> tuple[FrameStack, list[str], list[Path]]:
+def _load_input(path: Path, h5_dataset: str | None = None) -> tuple[np.ndarray, list[str], list[Path]]:
     """Load a single frame file, a 3D .npy stack, an HDF5 file, or a directory of frame files.
 
-    Returns a FrameStack, a list of frame names, and a list of source file paths (one per frame).
+    Returns an ndarray of shape (n_frames, h, w), a list of frame names, and a list of source paths.
     """
     if path.is_dir():
         files = sorted(f for f in path.iterdir() if f.suffix.lower() in _ALL_EXTS)
@@ -120,7 +120,7 @@ def _load_input(path: Path, h5_dataset: str | None = None) -> tuple[FrameStack, 
         for f in files:
             if f.suffix.lower() in _H5_EXTS:
                 stack, h5_names, h5_sources = _load_h5(f, h5_dataset)
-                frames.extend(stack[i] for i in range(stack.n_frames))
+                frames.extend(stack[i] for i in range(stack.shape[0]))
                 names.extend(h5_names)
                 sources.extend(h5_sources)
             else:
@@ -132,7 +132,7 @@ def _load_input(path: Path, h5_dataset: str | None = None) -> tuple[FrameStack, 
             raise ValueError(f"All files must be 2D frames; bad files: {bad}")
         data = np.stack(frames, axis=0)
         logger.info("Loaded %d frames from %s", len(frames), path)
-        return FrameStack(data.astype(np.float64)), names, sources
+        return data.astype(np.float64), names, sources
 
     if path.suffix.lower() in _H5_EXTS:
         return _load_h5(path, h5_dataset)
@@ -142,7 +142,7 @@ def _load_input(path: Path, h5_dataset: str | None = None) -> tuple[FrameStack, 
         if raw.ndim == 3:
             logger.info("Loaded frame stack %s from %s", raw.shape, path)
             n = raw.shape[0]
-            return FrameStack(raw.astype(np.float64)), [f"{path.stem}_{i:04d}" for i in range(n)], [path] * n
+            return raw.astype(np.float64), [f"{path.stem}_{i:04d}" for i in range(n)], [path] * n
         if raw.ndim != 2:
             raise ValueError(f"Input .npy must be 2D or 3D, got shape {raw.shape}")
         data = raw[np.newaxis, ...]
@@ -153,7 +153,7 @@ def _load_input(path: Path, h5_dataset: str | None = None) -> tuple[FrameStack, 
         data = raw[np.newaxis, ...]
 
     logger.info("Loaded single frame %s from %s", data.shape[1:], path)
-    return FrameStack(data.astype(np.float64)), [path.stem], [path]
+    return data.astype(np.float64), [path.stem], [path]
 
 
 def _load_mask(path: Path | None) -> np.ndarray | None:
@@ -325,11 +325,11 @@ def run_integrate(args: Namespace) -> int:
 
         else:
             stack, names, sources = _load_input(args.input, h5_dataset)
-            npt = args.npt or _calculate_npt(args.poni, stack.frame_shape, args.mode)
+            npt = args.npt or _calculate_npt(args.poni, stack.shape[1:], args.mode)
             logger.info("npt=%d (%s)", npt, "manual" if args.npt else "auto")
 
             if args.mode == "1d":
-                logger.info("Integrating (1D) %d frame(s) — npt=%d unit=%s workers=%s", stack.n_frames, npt, args.unit, args.workers)
+                logger.info("Integrating (1D) %d frame(s) — npt=%d unit=%s workers=%s", stack.shape[0], npt, args.unit, args.workers)
                 patterns = integrate_stack(
                     poni_path=args.poni, stack=stack, npt=npt, unit=args.unit, mask=mask,
                     workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,
@@ -345,7 +345,7 @@ def run_integrate(args: Namespace) -> int:
                     logger.info("Saved %d pattern(s) to %s", len(patterns), out)
 
             else:
-                logger.info("Integrating (2D) %d frame(s) — npt=%d npt_azim=%d unit=%s workers=%s", stack.n_frames, npt, args.npt_azim, args.unit, args.workers)
+                logger.info("Integrating (2D) %d frame(s) — npt=%d npt_azim=%d unit=%s workers=%s", stack.shape[0], npt, args.npt_azim, args.unit, args.workers)
                 cakes = integrate_cake_stack(
                     poni_path=args.poni, stack=stack, npt=npt, npt_azim=args.npt_azim, unit=args.unit, mask=mask,
                     workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,

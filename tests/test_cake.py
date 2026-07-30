@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
-from lumosxd_server.integration import AzimuthalEngine, Cake, FrameStack, integrate_cake_stack
+from lumosxd_server.integration import AzimuthalEngine, Cake, integrate_cake_stack
 
 
 @pytest.fixture
@@ -39,12 +39,12 @@ def poni_file(tmp_path: Path, integrator: AzimuthalIntegrator) -> Path:
 
 
 @pytest.fixture
-def stack() -> FrameStack:
+def stack() -> np.ndarray:
     data = np.ones((4, 64, 64), dtype=np.float64)
     data[1] *= 2.0
     data[2] *= 3.0
     data[3] *= 4.0
-    return FrameStack(data)
+    return data
 
 
 def test_cake_fields() -> None:
@@ -153,7 +153,7 @@ def test_invalid_npt_azim(integrator: AzimuthalIntegrator) -> None:
         AzimuthalEngine(integrator, npt=32, npt_azim=0)
 
 
-def test_integrate_cake_stack_serial(poni_file: Path, stack: FrameStack) -> None:
+def test_integrate_cake_stack_serial(poni_file: Path, stack: np.ndarray) -> None:
     cakes = integrate_cake_stack(poni_file, stack, npt=32, npt_azim=36, workers=1)
 
     assert len(cakes) == 4
@@ -162,7 +162,7 @@ def test_integrate_cake_stack_serial(poni_file: Path, stack: FrameStack) -> None
     assert cakes[0].intensity.mean() < cakes[3].intensity.mean()
 
 
-def test_integrate_cake_stack_parallel_matches_serial(poni_file: Path, stack: FrameStack) -> None:
+def test_integrate_cake_stack_parallel_matches_serial(poni_file: Path, stack: np.ndarray) -> None:
     serial = integrate_cake_stack(poni_file, stack, npt=32, npt_azim=36, workers=1)
     parallel = integrate_cake_stack(poni_file, stack, npt=32, npt_azim=36, workers=2)
 
@@ -173,8 +173,8 @@ def test_integrate_cake_stack_parallel_matches_serial(poni_file: Path, stack: Fr
         np.testing.assert_allclose(left.intensity, right.intensity)
 
 
-def test_integrate_cake_stack_with_mask(poni_file: Path, stack: FrameStack) -> None:
-    mask = np.zeros(stack.frame_shape, dtype=bool)
+def test_integrate_cake_stack_with_mask(poni_file: Path, stack: np.ndarray) -> None:
+    mask = np.zeros(stack.shape[1:], dtype=bool)
     mask[:, :32] = True
     cakes = integrate_cake_stack(poni_file, stack, npt=32, npt_azim=36, mask=mask, workers=2)
 
@@ -182,7 +182,7 @@ def test_integrate_cake_stack_with_mask(poni_file: Path, stack: FrameStack) -> N
     assert all(np.all(np.isfinite(c.intensity)) for c in cakes)
 
 
-def test_integrate_cake_stack_rejects_mask_mismatch(poni_file: Path, stack: FrameStack) -> None:
+def test_integrate_cake_stack_rejects_mask_mismatch(poni_file: Path, stack: np.ndarray) -> None:
     mask = np.zeros((10, 10), dtype=bool)
     with pytest.raises(ValueError, match="Mask shape"):
         integrate_cake_stack(poni_file, stack, npt=16, mask=mask, workers=1)

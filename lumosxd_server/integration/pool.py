@@ -24,7 +24,6 @@ import numpy as np
 
 from lumosxd_server.integration.cake import Cake
 from lumosxd_server.integration.engine import DEFAULT_NPT_AZIM, DEFAULT_UNIT, AzimuthalEngine
-from lumosxd_server.integration.frame_stack import FrameStack
 from lumosxd_server.integration.pattern import Pattern
 
 logger = getLogger(__name__)
@@ -152,7 +151,7 @@ def _integrate_h5_index(index: int) -> Pattern | Cake:
 
 def _serial_stack(
     poni_path: str | Path,
-    stack: FrameStack,
+    stack: np.ndarray,
     npt: int,
     npt_azim: int,
     unit: str,
@@ -165,22 +164,22 @@ def _serial_stack(
     if mask is not None:
         engine.set_mask(mask)
     if dim == "1d":
-        engine.warmup(stack.frame_shape)
+        engine.warmup(stack.shape[1:])
         integrate_fn = engine.integrate
     else:
-        engine.warmup_cake(stack.frame_shape)
+        engine.warmup_cake(stack.shape[1:])
         integrate_fn = engine.integrate_cake
     results: list[Pattern | Cake] = []
     for i, frame in enumerate(stack):
         results.append(integrate_fn(frame))
         if progress_callback:
-            progress_callback(i + 1, stack.n_frames)
+            progress_callback(i + 1, stack.shape[0])
     return results
 
 
 def _parallel_stack(
     poni_path: str | Path,
-    stack: FrameStack,
+    stack: np.ndarray,
     npt: int,
     npt_azim: int,
     unit: str,
@@ -190,7 +189,7 @@ def _parallel_stack(
     prefer_opencl: bool,
     progress_callback: Callable[[int, int], None] | None,
 ) -> list[Pattern | Cake]:
-    stack_shm, stack_name, stack_shape, stack_dtype = _share_ndarray(stack.data)
+    stack_shm, stack_name, stack_shape, stack_dtype = _share_ndarray(stack)
     mask_shm: shared_memory.SharedMemory | None = None
     mask_name: str | None = None
     mask_shape_t: tuple[int, int] | None = None
@@ -213,14 +212,14 @@ def _parallel_stack(
             initializer=_init_worker,
             initargs=(config,),
         ) as pool:
-            futures = {pool.submit(_integrate_index, i): i for i in range(stack.n_frames)}
-            results: list[Pattern | Cake | None] = [None] * stack.n_frames
+            futures = {pool.submit(_integrate_index, i): i for i in range(stack.shape[0])}
+            results: list[Pattern | Cake | None] = [None] * stack.shape[0]
             done = 0
             for future in as_completed(futures):
                 results[futures[future]] = future.result()
                 done += 1
                 if progress_callback:
-                    progress_callback(done, stack.n_frames)
+                    progress_callback(done, stack.shape[0])
         return results  # type: ignore[return-value]
     finally:
         stack_shm.close()
@@ -302,7 +301,7 @@ def _run_h5(
 
 def integrate_stack(
     poni_path: str | Path,
-    stack: FrameStack,
+    stack: np.ndarray,
     npt: int,
     unit: str = DEFAULT_UNIT,
     mask: np.ndarray | None = None,
@@ -311,19 +310,19 @@ def integrate_stack(
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Pattern]:
     """Integrate all frames in stack to 1D patterns, optionally in parallel."""
-    if mask is not None and mask.shape != stack.frame_shape:
-        raise ValueError(f"Mask shape {mask.shape} does not match frame shape {stack.frame_shape}")
-    n_workers = max(1, min(workers if workers is not None else (cpu_count() or 1), stack.n_frames))
+    if mask is not None and mask.shape != stack.shape[1:]:
+        raise ValueError(f"Mask shape {mask.shape} does not match frame shape {stack.shape[1:]}")
+    n_workers = max(1, min(workers if workers is not None else (cpu_count() or 1), stack.shape[0]))
     if n_workers == 1:
-        logger.info("Integrating %d frames serially (1D)", stack.n_frames)
+        logger.info("Integrating %d frames serially (1D)", stack.shape[0])
     else:
-        logger.info("Integrating %d frames with %d workers (1D)", stack.n_frames, n_workers)
+        logger.info("Integrating %d frames with %d workers (1D)", stack.shape[0], n_workers)
     return _serial_stack(poni_path, stack, npt, DEFAULT_NPT_AZIM, unit, "1d", mask, prefer_opencl, progress_callback) if n_workers == 1 else _parallel_stack(poni_path, stack, npt, DEFAULT_NPT_AZIM, unit, "1d", mask, n_workers, prefer_opencl, progress_callback)  # type: ignore[return-value]
 
 
 def integrate_cake_stack(
     poni_path: str | Path,
-    stack: FrameStack,
+    stack: np.ndarray,
     npt: int,
     npt_azim: int = DEFAULT_NPT_AZIM,
     unit: str = DEFAULT_UNIT,
@@ -333,13 +332,13 @@ def integrate_cake_stack(
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Cake]:
     """Integrate all frames in stack to 2D cakes, optionally in parallel."""
-    if mask is not None and mask.shape != stack.frame_shape:
-        raise ValueError(f"Mask shape {mask.shape} does not match frame shape {stack.frame_shape}")
-    n_workers = max(1, min(workers if workers is not None else (cpu_count() or 1), stack.n_frames))
+    if mask is not None and mask.shape != stack.shape[1:]:
+        raise ValueError(f"Mask shape {mask.shape} does not match frame shape {stack.shape[1:]}")
+    n_workers = max(1, min(workers if workers is not None else (cpu_count() or 1), stack.shape[0]))
     if n_workers == 1:
-        logger.info("Cake-integrating %d frames serially (2D)", stack.n_frames)
+        logger.info("Cake-integrating %d frames serially (2D)", stack.shape[0])
     else:
-        logger.info("Cake-integrating %d frames with %d workers (2D)", stack.n_frames, n_workers)
+        logger.info("Cake-integrating %d frames with %d workers (2D)", stack.shape[0], n_workers)
     return _serial_stack(poni_path, stack, npt, npt_azim, unit, "2d", mask, prefer_opencl, progress_callback) if n_workers == 1 else _parallel_stack(poni_path, stack, npt, npt_azim, unit, "2d", mask, n_workers, prefer_opencl, progress_callback)  # type: ignore[return-value]
 
 

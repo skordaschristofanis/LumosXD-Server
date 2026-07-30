@@ -20,8 +20,6 @@ import fabio
 import h5py
 import numpy as np
 
-from pyFAI.integrator.azimuthal import AzimuthalIntegrator
-
 from lumosxd_server.integration import (
     Cake,
     Pattern,
@@ -30,10 +28,10 @@ from lumosxd_server.integration import (
     integrate_h5_stack,
     integrate_stack,
 )
+from lumosxd_server.utils import calculate_npt
 
 logger = getLogger(__name__)
 
-_NPT_FACTORS = {"1d": 1.5, "2d": 2.0}  # scale pixel-distance to farthest corner; 2D needs more bins for azimuthal resolution
 _NPY_EXTS = {".npy"}
 _H5_EXTS = {".h5", ".hdf5", ".nxs", ".nx"}
 _IMAGE_EXTS = {".tif", ".tiff", ".edf", ".cbf", ".mar3450", ".img"}
@@ -47,19 +45,6 @@ _RADIAL_AXIS = {
     "d_nm": ("d", "nm"),
     "d_A": ("d", "angstrom"),
 }
-
-
-def _calculate_npt(poni_path: Path, frame_shape: tuple[int, int], mode: str) -> int:
-    """Calculate radial integration points from beam center to farthest image corner."""
-    ai = AzimuthalIntegrator()
-    ai.load(str(poni_path))
-    if ai.pixel1 <= 0 or ai.pixel2 <= 0:
-        raise ValueError(f"Invalid pixel size in {poni_path}: pixel1={ai.pixel1}, pixel2={ai.pixel2}")
-    center_y = ai.poni1 / ai.pixel1
-    center_x = ai.poni2 / ai.pixel2
-    h, w = frame_shape
-    max_dist = max(np.sqrt((r - center_y) ** 2 + (c - center_x) ** 2) for r, c in ((0, 0), (0, w), (h, 0), (h, w)))
-    return int(max_dist * _NPT_FACTORS[mode])
 
 
 def _find_image_datasets(h5file: h5py.File) -> list[str]:
@@ -312,7 +297,7 @@ def run_integrate(args: Namespace) -> int:
 
         if is_single_h5:
             n_frames, frame_shape, dataset, names, sources = _get_h5_metadata(args.input, h5_dataset)
-            npt = args.npt or _calculate_npt(args.poni, frame_shape, args.mode)
+            npt = args.npt or calculate_npt(args.poni, frame_shape, args.mode)
             logger.info("npt=%d (%s) — streaming %d HDF5 frame(s)", npt, "manual" if args.npt else "auto", n_frames)
 
             if args.mode == "1d":
@@ -350,7 +335,7 @@ def run_integrate(args: Namespace) -> int:
 
         else:
             stack, names, sources = _load_input(args.input, h5_dataset)
-            npt = args.npt or _calculate_npt(args.poni, stack.shape[1:], args.mode)
+            npt = args.npt or calculate_npt(args.poni, stack.shape[1:], args.mode)
             logger.info("npt=%d (%s)", npt, "manual" if args.npt else "auto")
             default_dir = args.input if args.input.is_dir() else args.input.parent
 

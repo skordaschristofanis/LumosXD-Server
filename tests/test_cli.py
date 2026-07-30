@@ -17,7 +17,8 @@ import numpy as np
 import pytest
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
-from lumosxd_server.cli import _calculate_npt, _load_input, _write_h5_nexus
+from lumosxd_server.cli import _load_input, _write_h5_nexus
+from lumosxd_server.utils import calculate_npt
 from lumosxd_server.integration.results import Pattern
 
 
@@ -38,7 +39,7 @@ def test_calculate_npt_1d_centered_beam(tmp_path: Path) -> None:
     poni = tmp_path / "cal.poni"
     ai.save(str(poni))
 
-    npt = _calculate_npt(poni, (1000, 1000), "1d")
+    npt = calculate_npt(poni, (1000, 1000), "1d")
 
     assert 900 < npt < 1200
 
@@ -48,8 +49,8 @@ def test_calculate_npt_2d_uses_larger_factor(tmp_path: Path) -> None:
     poni = tmp_path / "cal.poni"
     ai.save(str(poni))
 
-    npt_1d = _calculate_npt(poni, (1000, 1000), "1d")
-    npt_2d = _calculate_npt(poni, (1000, 1000), "2d")
+    npt_1d = calculate_npt(poni, (1000, 1000), "1d")
+    npt_2d = calculate_npt(poni, (1000, 1000), "2d")
 
     assert npt_2d > npt_1d
 
@@ -59,12 +60,12 @@ def test_calculate_npt_off_centre_beam(tmp_path: Path) -> None:
     poni = tmp_path / "cal.poni"
     ai.save(str(poni))
 
-    npt_corner = _calculate_npt(poni, (1000, 1000), "1d")
+    npt_corner = calculate_npt(poni, (1000, 1000), "1d")
 
     ai2 = AzimuthalIntegrator(dist=0.1, poni1=0.05, poni2=0.05, pixel1=1e-4, pixel2=1e-4, wavelength=1e-10)
     poni2 = tmp_path / "cal2.poni"
     ai2.save(str(poni2))
-    npt_centre = _calculate_npt(poni2, (1000, 1000), "1d")
+    npt_centre = calculate_npt(poni2, (1000, 1000), "1d")
 
     assert npt_corner > npt_centre
 

@@ -22,9 +22,8 @@ from typing import Any
 import h5py
 import numpy as np
 
-from lumosxd_server.integration.cake import Cake
 from lumosxd_server.integration.engine import DEFAULT_NPT_AZIM, DEFAULT_UNIT, AzimuthalEngine
-from lumosxd_server.integration.pattern import Pattern
+from lumosxd_server.integration.results import Cake, Pattern
 
 logger = getLogger(__name__)
 

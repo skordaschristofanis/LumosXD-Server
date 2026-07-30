@@ -18,7 +18,7 @@ import pytest
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
 from lumosxd_server.cli import _calculate_npt, _load_input, _write_h5_nexus
-from lumosxd_server.integration.pattern import Pattern
+from lumosxd_server.integration.results import Pattern
 
 
 FRAME_SHAPE = (32, 32)

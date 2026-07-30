@@ -18,8 +18,7 @@ from pyFAI import load as pyfai_load
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 from pyFAI.method_registry import IntegrationMethod
 
-from lumosxd_server.integration.cake import Cake
-from lumosxd_server.integration.pattern import Pattern
+from lumosxd_server.integration.results import Cake, Pattern
 
 logger = getLogger(__name__)
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------------
 # Project: LumosXD-Server
-# File: lumosxd_server/integration/pattern.py
+# File: lumosxd_server/integration/results.py
 # ----------------------------------------------------------------------------------
 # Purpose:
-# Data type for a 1D diffraction pattern produced by azimuthal integration.
+# Result types returned by azimuthal integration: Pattern (1D) and Cake (2D).
 # ----------------------------------------------------------------------------------
 # Copyright (c) 2026 Christofanis Skordas, The University of Chicago
 # ----------------------------------------------------------------------------------
@@ -19,5 +19,15 @@ class Pattern:
     """1D azimuthally integrated diffraction pattern."""
 
     radial: np.ndarray
+    intensity: np.ndarray
+    unit: str
+
+
+@dataclass(frozen=True, slots=True)
+class Cake:
+    """2D azimuthally integrated cake (azimuthal × radial)."""
+
+    radial: np.ndarray
+    azimuthal: np.ndarray
     intensity: np.ndarray
     unit: str

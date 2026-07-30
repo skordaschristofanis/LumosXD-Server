@@ -10,10 +10,15 @@
 # ----------------------------------------------------------------------------------
 
 from lumosxd_server.integration.cake import Cake
-from lumosxd_server.integration.cake_pool import integrate_cake_stack
 from lumosxd_server.integration.engine import AzimuthalEngine
 from lumosxd_server.integration.frame_stack import FrameStack
 from lumosxd_server.integration.pattern import Pattern
-from lumosxd_server.integration.pool import integrate_stack
+from lumosxd_server.integration.pool import (
+    integrate_cake_stack, integrate_h5_cake_stack, integrate_h5_stack, integrate_stack,
+)
 
-__all__ = ["AzimuthalEngine", "Cake", "FrameStack", "Pattern", "integrate_cake_stack", "integrate_stack"]
+__all__ = [
+    "AzimuthalEngine", "Cake", "FrameStack", "Pattern",
+    "integrate_cake_stack", "integrate_h5_cake_stack",
+    "integrate_h5_stack", "integrate_stack",
+]

@@ -248,6 +248,35 @@ def _get_h5_metadata(
         raise ValueError(f"Dataset has unsupported shape {ds.shape}")
 
 
+def _save_results(
+    results: list[Pattern | Cake],
+    names: list[str],
+    sources: list[Path],
+    mode: str,
+    unit: str,
+    output: Path | None,
+    split: bool,
+    default_output_dir: Path,
+) -> None:
+    label = "pattern(s)" if mode == "1d" else "cake(s)"
+    if split:
+        output_dir = output or default_output_dir
+        _save_split(results, names, sources, output_dir, mode, unit)
+        logger.info("Saved %d %s to %s", len(results), label, output_dir)
+    else:
+        out = output
+        out.parent.mkdir(parents=True, exist_ok=True)
+        kwargs: dict = {
+            "radial": results[0].radial,
+            "intensity": np.stack([r.intensity for r in results], axis=0),
+            "unit": np.bytes_(unit),
+        }
+        if mode == "2d":
+            kwargs["azimuthal"] = results[0].azimuthal  # type: ignore[union-attr]
+        np.savez(out, **kwargs)
+        logger.info("Saved %d %s to %s", len(results), label, out)
+
+
 def _progress_callback(label: str) -> Callable[[int, int], None]:
     def _cb(done: int, total: int) -> None:
         logger.info("%s: frame %d/%d", label, done, total)
@@ -282,74 +311,39 @@ def run_integrate(args: Namespace) -> int:
 
             if args.mode == "1d":
                 logger.info("Integrating (1D) npt=%d unit=%s workers=%s", npt, args.unit, args.workers)
-                patterns = integrate_h5_stack(
+                results = integrate_h5_stack(
                     h5_path=args.input, dataset=dataset, n_frames=n_frames, frame_shape=frame_shape,
                     poni_path=args.poni, npt=npt, unit=args.unit, mask=mask,
                     workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,
                 )
-                if args.split:
-                    output_dir = args.output or args.input.parent
-                    _save_split(patterns, names, sources, output_dir, "1d", args.unit)
-                    logger.info("Saved %d pattern(s) to %s", len(patterns), output_dir)
-                else:
-                    out: Path = args.output
-                    out.parent.mkdir(parents=True, exist_ok=True)
-                    np.savez(out, radial=patterns[0].radial, intensity=np.stack([p.intensity for p in patterns], axis=0), unit=np.bytes_(args.unit))
-                    logger.info("Saved %d pattern(s) to %s", len(patterns), out)
-
             else:
                 logger.info("Integrating (2D) npt=%d npt_azim=%d unit=%s workers=%s", npt, args.npt_azim, args.unit, args.workers)
-                cakes = integrate_h5_cake_stack(
+                results = integrate_h5_cake_stack(
                     h5_path=args.input, dataset=dataset, n_frames=n_frames, frame_shape=frame_shape,
                     poni_path=args.poni, npt=npt, npt_azim=args.npt_azim, unit=args.unit, mask=mask,
                     workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,
                 )
-                if args.split:
-                    output_dir = args.output or args.input.parent
-                    _save_split(cakes, names, sources, output_dir, "2d", args.unit)
-                    logger.info("Saved %d cake(s) to %s", len(cakes), output_dir)
-                else:
-                    out = args.output
-                    out.parent.mkdir(parents=True, exist_ok=True)
-                    np.savez(out, radial=cakes[0].radial, azimuthal=cakes[0].azimuthal, intensity=np.stack([c.intensity for c in cakes], axis=0), unit=np.bytes_(args.unit))
-                    logger.info("Saved %d cake(s) to %s", len(cakes), out)
+            _save_results(results, names, sources, args.mode, args.unit, args.output, args.split, args.input.parent)
 
         else:
             stack, names, sources = _load_input(args.input, h5_dataset)
             npt = args.npt or _calculate_npt(args.poni, stack.shape[1:], args.mode)
             logger.info("npt=%d (%s)", npt, "manual" if args.npt else "auto")
+            default_dir = args.input if args.input.is_dir() else args.input.parent
 
             if args.mode == "1d":
                 logger.info("Integrating (1D) %d frame(s) — npt=%d unit=%s workers=%s", stack.shape[0], npt, args.unit, args.workers)
-                patterns = integrate_stack(
+                results = integrate_stack(
                     poni_path=args.poni, stack=stack, npt=npt, unit=args.unit, mask=mask,
                     workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,
                 )
-                if args.split:
-                    output_dir = args.output or (args.input if args.input.is_dir() else args.input.parent)
-                    _save_split(patterns, names, sources, output_dir, "1d", args.unit)
-                    logger.info("Saved %d pattern(s) to %s", len(patterns), output_dir)
-                else:
-                    out = args.output
-                    out.parent.mkdir(parents=True, exist_ok=True)
-                    np.savez(out, radial=patterns[0].radial, intensity=np.stack([p.intensity for p in patterns], axis=0), unit=np.bytes_(args.unit))
-                    logger.info("Saved %d pattern(s) to %s", len(patterns), out)
-
             else:
                 logger.info("Integrating (2D) %d frame(s) — npt=%d npt_azim=%d unit=%s workers=%s", stack.shape[0], npt, args.npt_azim, args.unit, args.workers)
-                cakes = integrate_cake_stack(
+                results = integrate_cake_stack(
                     poni_path=args.poni, stack=stack, npt=npt, npt_azim=args.npt_azim, unit=args.unit, mask=mask,
                     workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,
                 )
-                if args.split:
-                    output_dir = args.output or (args.input if args.input.is_dir() else args.input.parent)
-                    _save_split(cakes, names, sources, output_dir, "2d", args.unit)
-                    logger.info("Saved %d cake(s) to %s", len(cakes), output_dir)
-                else:
-                    out = args.output
-                    out.parent.mkdir(parents=True, exist_ok=True)
-                    np.savez(out, radial=cakes[0].radial, azimuthal=cakes[0].azimuthal, intensity=np.stack([c.intensity for c in cakes], axis=0), unit=np.bytes_(args.unit))
-                    logger.info("Saved %d cake(s) to %s", len(cakes), out)
+            _save_results(results, names, sources, args.mode, args.unit, args.output, args.split, default_dir)
 
     except Exception:
         logger.exception("integrate failed")

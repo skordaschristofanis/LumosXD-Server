@@ -63,7 +63,7 @@ def main() -> None:
 
     if args.input is None or args.poni is None or args.mode is None:
         parser.print_help()
-        exit(0)
+        exit(1)
 
     if not args.split and args.output is None:
         parser.error("OUTPUT is required unless --split is used")

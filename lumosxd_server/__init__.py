@@ -16,8 +16,6 @@ from sys import exit
 
 from lumosxd_server.cli import run_integrate, run_tests
 
-logger = getLogger(__name__)
-
 _VALID_UNITS = ("2th_deg", "2th_rad", "q_nm^-1", "q_A^-1", "d_nm", "d_A")
 
 

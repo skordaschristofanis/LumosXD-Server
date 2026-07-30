@@ -319,12 +319,12 @@ def integrate_stack(
         logger.info("Integrating %d frames serially (1D)", stack.shape[0])
     else:
         logger.info("Integrating %d frames with %d workers (1D)", stack.shape[0], n_workers)
-    fn = (
+    results = (
         _serial_stack(poni_path, stack, npt, DEFAULT_NPT_AZIM, unit, "1d", mask, prefer_opencl, progress_callback)
         if n_workers == 1
         else _parallel_stack(poni_path, stack, npt, DEFAULT_NPT_AZIM, unit, "1d", mask, n_workers, prefer_opencl, progress_callback)
     )
-    return cast(list[Pattern], fn)
+    return cast(list[Pattern], results)
 
 
 def integrate_cake_stack(
@@ -346,12 +346,12 @@ def integrate_cake_stack(
         logger.info("Cake-integrating %d frames serially (2D)", stack.shape[0])
     else:
         logger.info("Cake-integrating %d frames with %d workers (2D)", stack.shape[0], n_workers)
-    fn = (
+    results = (
         _serial_stack(poni_path, stack, npt, npt_azim, unit, "2d", mask, prefer_opencl, progress_callback)
         if n_workers == 1
         else _parallel_stack(poni_path, stack, npt, npt_azim, unit, "2d", mask, n_workers, prefer_opencl, progress_callback)
     )
-    return cast(list[Cake], fn)
+    return cast(list[Cake], results)
 
 
 def integrate_h5_stack(

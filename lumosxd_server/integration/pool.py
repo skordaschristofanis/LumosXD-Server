@@ -102,10 +102,7 @@ def _init_worker(config: _WorkerConfig) -> None:
     if mask is not None:
         engine.set_mask(mask)
     frame_shape = (int(config.stack_shape[1]), int(config.stack_shape[2]))
-    if config.dim == "1d":
-        engine.warmup(frame_shape)
-    else:
-        engine.warmup_cake(frame_shape)
+    engine.warmup(frame_shape, config.dim)
     _WORKER_ENGINE = engine
 
 
@@ -163,12 +160,8 @@ def _serial_stack(
     engine = AzimuthalEngine.from_poni(poni_path, npt, unit, prefer_opencl=prefer_opencl, npt_azim=npt_azim)
     if mask is not None:
         engine.set_mask(mask)
-    if dim == "1d":
-        engine.warmup(stack.shape[1:])
-        integrate_fn = engine.integrate
-    else:
-        engine.warmup_cake(stack.shape[1:])
-        integrate_fn = engine.integrate_cake
+    engine.warmup(stack.shape[1:], dim)
+    integrate_fn = engine.integrate if dim == "1d" else engine.integrate_cake
     results: list[Pattern | Cake] = []
     for i, frame in enumerate(stack):
         results.append(integrate_fn(frame))
@@ -248,12 +241,8 @@ def _run_h5(
         engine = AzimuthalEngine.from_poni(poni_path, npt, unit, prefer_opencl=prefer_opencl, npt_azim=npt_azim)
         if mask is not None:
             engine.set_mask(mask)
-        if dim == "1d":
-            engine.warmup(frame_shape)
-            integrate_fn = engine.integrate
-        else:
-            engine.warmup_cake(frame_shape)
-            integrate_fn = engine.integrate_cake
+        engine.warmup(frame_shape, dim)
+        integrate_fn = engine.integrate if dim == "1d" else engine.integrate_cake
         results: list[Pattern | Cake] = []
         with h5py.File(h5_path, "r") as f:
             ds = f[dataset]

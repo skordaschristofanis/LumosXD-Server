@@ -75,11 +75,8 @@ class AzimuthalEngine:
         self._npt_azim = npt_azim
         self._unit = unit
         self._mask = mask
-        self._prefer_opencl = prefer_opencl
         self._method = _select_method(prefer_opencl, dim=1)
         self._cake_method = _select_method(prefer_opencl, dim=2)
-        self._warmed_shape: tuple[int, int] | None = None
-        self._warmed_cake_shape: tuple[int, int] | None = None
 
     @classmethod
     def from_poni(
@@ -99,75 +96,28 @@ class AzimuthalEngine:
         return cls(loaded, npt, unit, prefer_opencl=prefer_opencl, npt_azim=npt_azim)
 
     @property
-    def integrator(self) -> AzimuthalIntegrator:
-        return self._integrator
-
-    @property
     def npt(self) -> int:
         return self._npt
-
-    @property
-    def unit(self) -> str:
-        return self._unit
-
-    @property
-    def mask(self) -> np.ndarray | None:
-        return self._mask
 
     @property
     def npt_azim(self) -> int:
         return self._npt_azim
 
-    @property
-    def prefer_opencl(self) -> bool:
-        return self._prefer_opencl
-
-    @property
-    def method(self) -> Any:
-        return self._method
-
-    @property
-    def cake_method(self) -> Any:
-        return self._cake_method
-
-    @property
-    def warmed_shape(self) -> tuple[int, int] | None:
-        return self._warmed_shape
-
-    @property
-    def warmed_cake_shape(self) -> tuple[int, int] | None:
-        return self._warmed_cake_shape
-
     def set_mask(self, mask: np.ndarray | None) -> None:
-        """Set the integration mask. Clears both warmup states so sparse tables can be rebuilt."""
         self._mask = mask
-        self._warmed_shape = None
-        self._warmed_cake_shape = None
-        logger.info("Mask updated; warmup cleared")
 
-    def warmup(self, shape: tuple[int, int]) -> None:
-        """Build sparse 1D integration tables for shape using a zero frame."""
+    def warmup(self, shape: tuple[int, int], dim: str = "1d") -> None:
+        """Pre-build integration lookup tables for the given frame shape and dimension."""
         if len(shape) != 2:
             raise ValueError(f"Expected shape (height, width), got {shape}")
         if self._mask is not None and self._mask.shape != shape:
             raise ValueError(f"Mask shape {self._mask.shape} does not match warmup shape {shape}")
-
         height, width = int(shape[0]), int(shape[1])
-        logger.info("Warming up integrator for shape=(%s, %s)", height, width)
-        self.integrate(np.zeros((height, width), dtype=np.float64))
-        self._warmed_shape = (height, width)
-
-    def warmup_cake(self, shape: tuple[int, int]) -> None:
-        """Build sparse 2D integration tables for shape using a zero frame."""
-        if len(shape) != 2:
-            raise ValueError(f"Expected shape (height, width), got {shape}")
-        if self._mask is not None and self._mask.shape != shape:
-            raise ValueError(f"Mask shape {self._mask.shape} does not match warmup shape {shape}")
-
-        height, width = int(shape[0]), int(shape[1])
-        logger.info("Warming up cake integrator for shape=(%s, %s)", height, width)
-        self.integrate_cake(np.zeros((height, width), dtype=np.float64))
-        self._warmed_cake_shape = (height, width)
+        logger.info("Warming up integrator for shape=(%s, %s) dim=%s", height, width, dim)
+        if dim == "1d":
+            self.integrate(np.zeros((height, width), dtype=np.float64))
+        else:
+            self.integrate_cake(np.zeros((height, width), dtype=np.float64))
 
     def integrate(self, image: np.ndarray) -> Pattern:
         """Integrate a 2D detector frame to a 1D pattern."""
@@ -201,10 +151,7 @@ class AzimuthalEngine:
 
         logger.debug(
             "Cake integrating frame shape=%s npt=%s npt_azim=%s unit=%s",
-            image.shape,
-            self._npt,
-            self._npt_azim,
-            self._unit,
+            image.shape, self._npt, self._npt_azim, self._unit,
         )
         result = self._integrator.integrate2d(
             image,
@@ -222,4 +169,3 @@ class AzimuthalEngine:
             intensity=np.asarray(result.intensity, dtype=np.float64),
             unit=self._unit,
         )
-

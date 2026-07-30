@@ -112,29 +112,31 @@ def test_warmup_cake_then_repeated_integrate(integrator: AzimuthalIntegrator) ->
     engine = AzimuthalEngine(integrator, npt=64, npt_azim=36)
     shape = (100, 100)
 
-    assert engine.warmed_cake_shape is None
-    engine.warmup_cake(shape)
-    assert engine.warmed_cake_shape == shape
-
+    engine.warmup(shape, "2d")
     cakes = [engine.integrate_cake(np.ones(shape, dtype=np.float64)) for _ in range(3)]
     assert len(cakes) == 3
     assert all(c.intensity.shape == (36, 64) for c in cakes)
 
 
-def test_warmup_cake_rejects_invalid_shape(integrator: AzimuthalIntegrator) -> None:
+def test_warmup_rejects_invalid_shape(integrator: AzimuthalIntegrator) -> None:
     engine = AzimuthalEngine(integrator, npt=32)
     with pytest.raises(ValueError, match="shape"):
-        engine.warmup_cake((100,))
+        engine.warmup((100,))
 
 
-def test_set_mask_clears_cake_warmup(integrator: AzimuthalIntegrator) -> None:
-    engine = AzimuthalEngine(integrator, npt=32)
+def test_set_mask_affects_cake_integration(integrator: AzimuthalIntegrator) -> None:
     shape = (100, 100)
-    engine.warmup_cake(shape)
-    assert engine.warmed_cake_shape == shape
+    image = np.ones(shape, dtype=np.float64)
+    engine = AzimuthalEngine(integrator, npt=32, npt_azim=36)
+    engine.warmup(shape, "2d")
+    before = engine.integrate_cake(image)
 
-    engine.set_mask(np.zeros(shape, dtype=bool))
-    assert engine.warmed_cake_shape is None
+    mask = np.zeros(shape, dtype=bool)
+    mask[:, :50] = True
+    engine.set_mask(mask)
+    after = engine.integrate_cake(image)
+
+    assert not np.allclose(before.intensity, after.intensity)
 
 
 def test_from_poni_with_npt_azim(poni_file: Path) -> None:

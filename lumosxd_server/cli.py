@@ -261,7 +261,8 @@ def _save_results(
         _save_split(results, names, sources, output_dir, mode, unit)
         logger.info("Saved %d %s to %s", len(results), label, output_dir)
     else:
-        assert output is not None, "output path required when split=False"
+        if output is None:
+            raise ValueError("output path required when split=False")
         output.parent.mkdir(parents=True, exist_ok=True)
         kwargs: dict = {
             "radial": results[0].radial,

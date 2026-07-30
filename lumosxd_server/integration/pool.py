@@ -84,6 +84,15 @@ def _share_ndarray(arr: np.ndarray) -> tuple[shared_memory.SharedMemory, str, tu
     return shm, shm.name, contiguous.shape, str(contiguous.dtype)
 
 
+def _share_mask(
+    mask: np.ndarray | None,
+) -> tuple[shared_memory.SharedMemory | None, str | None, tuple[int, int] | None, str | None]:
+    if mask is None:
+        return None, None, None, None
+    shm, name, shape, dtype = _share_ndarray(mask)
+    return shm, name, (int(shape[0]), int(shape[1])), dtype
+
+
 def _init_worker(config: _WorkerConfig) -> None:
     global _WORKER_ENGINE, _WORKER_STACK, _WORKER_STACK_SHM, _WORKER_MASK_SHM, _WORKER_DIM
     environ["OMP_NUM_THREADS"] = _WORKER_OMP_THREADS
@@ -182,13 +191,7 @@ def _parallel_stack(
     progress_callback: Callable[[int, int], None] | None,
 ) -> list[Pattern | Cake]:
     stack_shm, stack_name, stack_shape, stack_dtype = _share_ndarray(stack)
-    mask_shm: shared_memory.SharedMemory | None = None
-    mask_name: str | None = None
-    mask_shape_t: tuple[int, int] | None = None
-    mask_dtype_s: str | None = None
-    if mask is not None:
-        mask_shm, mask_name, m_shape, mask_dtype_s = _share_ndarray(mask)
-        mask_shape_t = (int(m_shape[0]), int(m_shape[1]))
+    mask_shm, mask_name, mask_shape_t, mask_dtype_s = _share_mask(mask)
     config = _WorkerConfig(
         poni_path=str(poni_path), npt=npt, npt_azim=npt_azim, unit=unit,
         prefer_opencl=prefer_opencl, dim=dim,
@@ -252,13 +255,7 @@ def _run_h5(
                     progress_callback(i + 1, n_frames)
         return results
 
-    mask_shm: shared_memory.SharedMemory | None = None
-    mask_name: str | None = None
-    mask_shape_t: tuple[int, int] | None = None
-    mask_dtype_s: str | None = None
-    if mask is not None:
-        mask_shm, mask_name, m_shape, mask_dtype_s = _share_ndarray(mask)
-        mask_shape_t = (int(m_shape[0]), int(m_shape[1]))
+    mask_shm, mask_name, mask_shape_t, mask_dtype_s = _share_mask(mask)
     config = _H5WorkerConfig(
         poni_path=str(poni_path), h5_path=str(h5_path), dataset=dataset,
         frame_shape=frame_shape, npt=npt, npt_azim=npt_azim, unit=unit,

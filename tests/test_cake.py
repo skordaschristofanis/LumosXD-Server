@@ -188,4 +188,3 @@ def test_integrate_cake_stack_rejects_mask_mismatch(poni_file: Path, stack: np.n
     mask = np.zeros((10, 10), dtype=bool)
     with pytest.raises(ValueError, match="Mask shape"):
         integrate_cake_stack(poni_file, stack, npt=16, mask=mask, workers=1)
-

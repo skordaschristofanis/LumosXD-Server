@@ -14,6 +14,7 @@ from collections.abc import Callable
 from itertools import groupby
 from logging import getLogger
 from pathlib import Path
+from typing import cast
 
 import fabio
 import h5py
@@ -22,9 +23,12 @@ import numpy as np
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 
 from lumosxd_server.integration import (
-    Cake, Pattern,
-    integrate_cake_stack, integrate_h5_cake_stack,
-    integrate_h5_stack, integrate_stack,
+    Cake,
+    Pattern,
+    integrate_cake_stack,
+    integrate_h5_cake_stack,
+    integrate_h5_stack,
+    integrate_stack,
 )
 
 logger = getLogger(__name__)
@@ -40,8 +44,8 @@ _RADIAL_AXIS = {
     "2th_rad": ("two_theta", "radians"),
     "q_nm^-1": ("q", "nm^-1"),
     "q_A^-1": ("q", "angstrom^-1"),
-    "d_nm":    ("d", "nm"),
-    "d_A":     ("d", "angstrom"),
+    "d_nm": ("d", "nm"),
+    "d_A": ("d", "angstrom"),
 }
 
 
@@ -52,10 +56,7 @@ def _calculate_npt(poni_path: Path, frame_shape: tuple[int, int], mode: str) -> 
     center_y = ai.poni1 / ai.pixel1
     center_x = ai.poni2 / ai.pixel2
     h, w = frame_shape
-    max_dist = max(
-        np.sqrt((r - center_y) ** 2 + (c - center_x) ** 2)
-        for r, c in ((0, 0), (0, w), (h, 0), (h, w))
-    )
+    max_dist = max(np.sqrt((r - center_y) ** 2 + (c - center_x) ** 2) for r, c in ((0, 0), (0, w), (h, 0), (h, w)))
     return int(max_dist * _NPT_FACTORS[mode])
 
 
@@ -78,10 +79,7 @@ def _resolve_h5_dataset(f: h5py.File, h5_dataset: str | None, path: Path) -> str
     if not candidates:
         raise ValueError(f"No 2D/3D datasets found in {path}")
     if len(candidates) > 1:
-        raise ValueError(
-            f"Multiple image datasets in {path}: {candidates}. "
-            "Use --h5-dataset to specify one."
-        )
+        raise ValueError(f"Multiple image datasets in {path}: {candidates}. Use --h5-dataset to specify one.")
     logger.info("Auto-selected dataset '%s' from %s", candidates[0], path)
     return candidates[0]
 
@@ -228,12 +226,11 @@ def _save_split(results: list[Pattern | Cake], names: list[str], sources: list[P
                 if mode == "1d":
                     np.savez(out, radial=result.radial, intensity=result.intensity, unit=np.bytes_(unit))
                 else:
-                    np.savez(out, radial=result.radial, azimuthal=result.azimuthal, intensity=result.intensity, unit=np.bytes_(unit))
+                    cake = cast(Cake, result)
+                    np.savez(out, radial=cake.radial, azimuthal=cake.azimuthal, intensity=cake.intensity, unit=np.bytes_(unit))
 
 
-def _get_h5_metadata(
-    path: Path, h5_dataset: str | None
-) -> tuple[int, tuple[int, int], str, list[str], list[Path]]:
+def _get_h5_metadata(path: Path, h5_dataset: str | None) -> tuple[int, tuple[int, int], str, list[str], list[Path]]:
     """Return (n_frames, frame_shape, dataset_path, names, sources) without loading frame data."""
     with h5py.File(path, "r") as f:
         ds_path = _resolve_h5_dataset(f, h5_dataset, path)
@@ -264,22 +261,23 @@ def _save_results(
         _save_split(results, names, sources, output_dir, mode, unit)
         logger.info("Saved %d %s to %s", len(results), label, output_dir)
     else:
-        out = output
-        out.parent.mkdir(parents=True, exist_ok=True)
+        assert output is not None, "output path required when split=False"
+        output.parent.mkdir(parents=True, exist_ok=True)
         kwargs: dict = {
             "radial": results[0].radial,
             "intensity": np.stack([r.intensity for r in results], axis=0),
             "unit": np.bytes_(unit),
         }
         if mode == "2d":
-            kwargs["azimuthal"] = results[0].azimuthal  # type: ignore[union-attr]
-        np.savez(out, **kwargs)
-        logger.info("Saved %d %s to %s", len(results), label, out)
+            kwargs["azimuthal"] = cast(Cake, results[0]).azimuthal
+        np.savez(output, **kwargs)
+        logger.info("Saved %d %s to %s", len(results), label, output)
 
 
 def _progress_callback(label: str) -> Callable[[int, int], None]:
     def _cb(done: int, total: int) -> None:
         logger.info("%s: frame %d/%d", label, done, total)
+
     return _cb
 
 
@@ -312,18 +310,35 @@ def run_integrate(args: Namespace) -> int:
             if args.mode == "1d":
                 logger.info("Integrating (1D) npt=%d unit=%s workers=%s", npt, args.unit, args.workers)
                 results = integrate_h5_stack(
-                    h5_path=args.input, dataset=dataset, n_frames=n_frames, frame_shape=frame_shape,
-                    poni_path=args.poni, npt=npt, unit=args.unit, mask=mask,
-                    workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,
+                    h5_path=args.input,
+                    dataset=dataset,
+                    n_frames=n_frames,
+                    frame_shape=frame_shape,
+                    poni_path=args.poni,
+                    npt=npt,
+                    unit=args.unit,
+                    mask=mask,
+                    workers=args.workers,
+                    prefer_opencl=args.opencl,
+                    progress_callback=progress,
                 )
             else:
                 logger.info("Integrating (2D) npt=%d npt_azim=%d unit=%s workers=%s", npt, args.npt_azim, args.unit, args.workers)
                 results = integrate_h5_cake_stack(
-                    h5_path=args.input, dataset=dataset, n_frames=n_frames, frame_shape=frame_shape,
-                    poni_path=args.poni, npt=npt, npt_azim=args.npt_azim, unit=args.unit, mask=mask,
-                    workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,
+                    h5_path=args.input,
+                    dataset=dataset,
+                    n_frames=n_frames,
+                    frame_shape=frame_shape,
+                    poni_path=args.poni,
+                    npt=npt,
+                    npt_azim=args.npt_azim,
+                    unit=args.unit,
+                    mask=mask,
+                    workers=args.workers,
+                    prefer_opencl=args.opencl,
+                    progress_callback=progress,
                 )
-            _save_results(results, names, sources, args.mode, args.unit, args.output, args.split, args.input.parent)
+            _save_results(cast(list[Pattern | Cake], results), names, sources, args.mode, args.unit, args.output, args.split, args.input.parent)
 
         else:
             stack, names, sources = _load_input(args.input, h5_dataset)
@@ -334,16 +349,29 @@ def run_integrate(args: Namespace) -> int:
             if args.mode == "1d":
                 logger.info("Integrating (1D) %d frame(s) — npt=%d unit=%s workers=%s", stack.shape[0], npt, args.unit, args.workers)
                 results = integrate_stack(
-                    poni_path=args.poni, stack=stack, npt=npt, unit=args.unit, mask=mask,
-                    workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,
+                    poni_path=args.poni,
+                    stack=stack,
+                    npt=npt,
+                    unit=args.unit,
+                    mask=mask,
+                    workers=args.workers,
+                    prefer_opencl=args.opencl,
+                    progress_callback=progress,
                 )
             else:
                 logger.info("Integrating (2D) %d frame(s) — npt=%d npt_azim=%d unit=%s workers=%s", stack.shape[0], npt, args.npt_azim, args.unit, args.workers)
                 results = integrate_cake_stack(
-                    poni_path=args.poni, stack=stack, npt=npt, npt_azim=args.npt_azim, unit=args.unit, mask=mask,
-                    workers=args.workers, prefer_opencl=args.opencl, progress_callback=progress,
+                    poni_path=args.poni,
+                    stack=stack,
+                    npt=npt,
+                    npt_azim=args.npt_azim,
+                    unit=args.unit,
+                    mask=mask,
+                    workers=args.workers,
+                    prefer_opencl=args.opencl,
+                    progress_callback=progress,
                 )
-            _save_results(results, names, sources, args.mode, args.unit, args.output, args.split, default_dir)
+            _save_results(cast(list[Pattern | Cake], results), names, sources, args.mode, args.unit, args.output, args.split, default_dir)
 
     except Exception:
         logger.exception("integrate failed")

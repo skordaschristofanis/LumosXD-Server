@@ -31,10 +31,19 @@ def main() -> None:
     parser = ArgumentParser("lumosxd-server", description="LumosXD-Server — pyFAI integration backend")
     parser.add_argument("-t", "--test", action="store_true", help="Run the test suite")
     parser.add_argument("input", type=Path, metavar="INPUT", nargs="?", help="Frame file (.npy/.tif/.h5/…) or directory of frames")
-    parser.add_argument("output", type=Path, metavar="OUTPUT", nargs="?", default=None, help="Output path — .npz file, or directory when --split (default: input directory when --split)")
+    parser.add_argument(
+        "output",
+        type=Path,
+        metavar="OUTPUT",
+        nargs="?",
+        default=None,
+        help="Output path — .npz file, or directory when --split (default: input directory when --split)",
+    )
     parser.add_argument("--poni", type=Path, metavar="PONI", help="pyFAI calibration .poni file")
     parser.add_argument("--npt", type=int, default=None, metavar="N", help="Number of radial integration points (default: auto from poni and image size)")
-    parser.add_argument("--unit", default="2th_deg", choices=_VALID_UNITS, metavar="UNIT", help=f"Radial unit (default: 2th_deg). Choices: {', '.join(_VALID_UNITS)}")
+    parser.add_argument(
+        "--unit", default="2th_deg", choices=_VALID_UNITS, metavar="UNIT", help=f"Radial unit (default: 2th_deg). Choices: {', '.join(_VALID_UNITS)}"
+    )
     parser.add_argument("--mask", type=Path, default=None, metavar="MASK", help="Optional 2D boolean mask .npy file (True = masked out)")
     parser.add_argument("--workers", type=int, default=None, metavar="N", help="Worker processes for parallel integration (default: CPU count)")
     parser.add_argument("--opencl", action="store_true", help="Prefer OpenCL GPU integration when available")
@@ -60,4 +69,3 @@ def main() -> None:
         parser.error("OUTPUT is required unless --split is used")
 
     exit(run_integrate(args))
-

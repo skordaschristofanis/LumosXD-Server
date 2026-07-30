@@ -105,7 +105,7 @@ class AzimuthalEngine:
     def set_mask(self, mask: np.ndarray | None) -> None:
         self._mask = mask
 
-    def warmup(self, shape: tuple[int, int], dim: str = "1d") -> None:
+    def warmup(self, shape: tuple[int, ...], dim: str = "1d") -> None:
         """Pre-build integration lookup tables for the given frame shape and dimension."""
         if len(shape) != 2:
             raise ValueError(f"Expected shape (height, width), got {shape}")
@@ -150,7 +150,10 @@ class AzimuthalEngine:
 
         logger.debug(
             "Cake integrating frame shape=%s npt=%s npt_azim=%s unit=%s",
-            image.shape, self._npt, self._npt_azim, self._unit,
+            image.shape,
+            self._npt,
+            self._npt_azim,
+            self._unit,
         )
         result = self._integrator.integrate2d(
             image,

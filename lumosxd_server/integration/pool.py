@@ -17,7 +17,7 @@ from logging import getLogger
 from multiprocessing import get_context, shared_memory
 from os import cpu_count, environ
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import h5py
 import numpy as np
@@ -104,8 +104,11 @@ def _init_worker(config: _WorkerConfig) -> None:
         _WORKER_MASK_SHM = shared_memory.SharedMemory(name=config.mask_name)
         mask = np.ndarray(config.mask_shape, dtype=np.dtype(config.mask_dtype), buffer=_WORKER_MASK_SHM.buf)
     engine = AzimuthalEngine.from_poni(
-        config.poni_path, config.npt, config.unit,
-        prefer_opencl=config.prefer_opencl, npt_azim=config.npt_azim,
+        config.poni_path,
+        config.npt,
+        config.unit,
+        prefer_opencl=config.prefer_opencl,
+        npt_azim=config.npt_azim,
     )
     if mask is not None:
         engine.set_mask(mask)
@@ -133,15 +136,15 @@ def _init_h5_worker(config: _H5WorkerConfig) -> None:
         _H5_WORKER_MASK_SHM = shared_memory.SharedMemory(name=config.mask_name)
         mask = np.ndarray(config.mask_shape, dtype=np.dtype(config.mask_dtype), buffer=_H5_WORKER_MASK_SHM.buf)
     engine = AzimuthalEngine.from_poni(
-        config.poni_path, config.npt, config.unit,
-        prefer_opencl=config.prefer_opencl, npt_azim=config.npt_azim,
+        config.poni_path,
+        config.npt,
+        config.unit,
+        prefer_opencl=config.prefer_opencl,
+        npt_azim=config.npt_azim,
     )
     if mask is not None:
         engine.set_mask(mask)
-    if config.dim == "1d":
-        engine.warmup(config.frame_shape)
-    else:
-        engine.warmup_cake(config.frame_shape)
+    engine.warmup(config.frame_shape, config.dim)
     _H5_WORKER_ENGINE = engine
 
 
@@ -193,12 +196,18 @@ def _parallel_stack(
     stack_shm, stack_name, stack_shape, stack_dtype = _share_ndarray(stack)
     mask_shm, mask_name, mask_shape_t, mask_dtype_s = _share_mask(mask)
     config = _WorkerConfig(
-        poni_path=str(poni_path), npt=npt, npt_azim=npt_azim, unit=unit,
-        prefer_opencl=prefer_opencl, dim=dim,
+        poni_path=str(poni_path),
+        npt=npt,
+        npt_azim=npt_azim,
+        unit=unit,
+        prefer_opencl=prefer_opencl,
+        dim=dim,
         stack_name=stack_name,
         stack_shape=(int(stack_shape[0]), int(stack_shape[1]), int(stack_shape[2])),
         stack_dtype=stack_dtype,
-        mask_name=mask_name, mask_shape=mask_shape_t, mask_dtype=mask_dtype_s,
+        mask_name=mask_name,
+        mask_shape=mask_shape_t,
+        mask_dtype=mask_dtype_s,
     )
     try:
         with ProcessPoolExecutor(
@@ -215,7 +224,7 @@ def _parallel_stack(
                 done += 1
                 if progress_callback:
                     progress_callback(done, stack.shape[0])
-        return results  # type: ignore[return-value]
+        return cast(list[Pattern | Cake], results)
     finally:
         stack_shm.close()
         stack_shm.unlink()
@@ -257,10 +266,18 @@ def _run_h5(
 
     mask_shm, mask_name, mask_shape_t, mask_dtype_s = _share_mask(mask)
     config = _H5WorkerConfig(
-        poni_path=str(poni_path), h5_path=str(h5_path), dataset=dataset,
-        frame_shape=frame_shape, npt=npt, npt_azim=npt_azim, unit=unit,
-        prefer_opencl=prefer_opencl, dim=dim,
-        mask_name=mask_name, mask_shape=mask_shape_t, mask_dtype=mask_dtype_s,
+        poni_path=str(poni_path),
+        h5_path=str(h5_path),
+        dataset=dataset,
+        frame_shape=frame_shape,
+        npt=npt,
+        npt_azim=npt_azim,
+        unit=unit,
+        prefer_opencl=prefer_opencl,
+        dim=dim,
+        mask_name=mask_name,
+        mask_shape=mask_shape_t,
+        mask_dtype=mask_dtype_s,
     )
     try:
         with ProcessPoolExecutor(
@@ -277,7 +294,7 @@ def _run_h5(
                 done += 1
                 if progress_callback:
                     progress_callback(done, n_frames)
-        return h5_results  # type: ignore[return-value]
+        return cast(list[Pattern | Cake], h5_results)
     finally:
         if mask_shm is not None:
             mask_shm.close()
@@ -302,7 +319,12 @@ def integrate_stack(
         logger.info("Integrating %d frames serially (1D)", stack.shape[0])
     else:
         logger.info("Integrating %d frames with %d workers (1D)", stack.shape[0], n_workers)
-    return _serial_stack(poni_path, stack, npt, DEFAULT_NPT_AZIM, unit, "1d", mask, prefer_opencl, progress_callback) if n_workers == 1 else _parallel_stack(poni_path, stack, npt, DEFAULT_NPT_AZIM, unit, "1d", mask, n_workers, prefer_opencl, progress_callback)  # type: ignore[return-value]
+    fn = (
+        _serial_stack(poni_path, stack, npt, DEFAULT_NPT_AZIM, unit, "1d", mask, prefer_opencl, progress_callback)
+        if n_workers == 1
+        else _parallel_stack(poni_path, stack, npt, DEFAULT_NPT_AZIM, unit, "1d", mask, n_workers, prefer_opencl, progress_callback)
+    )
+    return cast(list[Pattern], fn)
 
 
 def integrate_cake_stack(
@@ -324,7 +346,12 @@ def integrate_cake_stack(
         logger.info("Cake-integrating %d frames serially (2D)", stack.shape[0])
     else:
         logger.info("Cake-integrating %d frames with %d workers (2D)", stack.shape[0], n_workers)
-    return _serial_stack(poni_path, stack, npt, npt_azim, unit, "2d", mask, prefer_opencl, progress_callback) if n_workers == 1 else _parallel_stack(poni_path, stack, npt, npt_azim, unit, "2d", mask, n_workers, prefer_opencl, progress_callback)  # type: ignore[return-value]
+    fn = (
+        _serial_stack(poni_path, stack, npt, npt_azim, unit, "2d", mask, prefer_opencl, progress_callback)
+        if n_workers == 1
+        else _parallel_stack(poni_path, stack, npt, npt_azim, unit, "2d", mask, n_workers, prefer_opencl, progress_callback)
+    )
+    return cast(list[Cake], fn)
 
 
 def integrate_h5_stack(
@@ -346,7 +373,10 @@ def integrate_h5_stack(
     n_workers = max(1, min(workers if workers is not None else (cpu_count() or 1), n_frames))
     label = "serially" if n_workers == 1 else f"with {n_workers} workers"
     logger.info("H5-integrating %d frames %s (1D)", n_frames, label)
-    return _run_h5("1d", h5_path, dataset, n_frames, frame_shape, poni_path, npt, DEFAULT_NPT_AZIM, unit, mask, n_workers, prefer_opencl, progress_callback)  # type: ignore[return-value]
+    return cast(
+        list[Pattern],
+        _run_h5("1d", h5_path, dataset, n_frames, frame_shape, poni_path, npt, DEFAULT_NPT_AZIM, unit, mask, n_workers, prefer_opencl, progress_callback),
+    )
 
 
 def integrate_h5_cake_stack(
@@ -369,4 +399,6 @@ def integrate_h5_cake_stack(
     n_workers = max(1, min(workers if workers is not None else (cpu_count() or 1), n_frames))
     label = "serially" if n_workers == 1 else f"with {n_workers} workers"
     logger.info("H5-cake-integrating %d frames %s (2D)", n_frames, label)
-    return _run_h5("2d", h5_path, dataset, n_frames, frame_shape, poni_path, npt, npt_azim, unit, mask, n_workers, prefer_opencl, progress_callback)  # type: ignore[return-value]
+    return cast(
+        list[Cake], _run_h5("2d", h5_path, dataset, n_frames, frame_shape, poni_path, npt, npt_azim, unit, mask, n_workers, prefer_opencl, progress_callback)
+    )

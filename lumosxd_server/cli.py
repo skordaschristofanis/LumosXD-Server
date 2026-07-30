@@ -10,7 +10,7 @@
 # ----------------------------------------------------------------------------------
 
 from argparse import Namespace
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from itertools import groupby
 from logging import getLogger
 from pathlib import Path
@@ -33,7 +33,7 @@ from lumosxd_server.integration import (
 
 logger = getLogger(__name__)
 
-_NPT_FACTORS = {"1d": 1.5, "2d": 2.0}
+_NPT_FACTORS = {"1d": 1.5, "2d": 2.0}  # scale pixel-distance to farthest corner; 2D needs more bins for azimuthal resolution
 _NPY_EXTS = {".npy"}
 _H5_EXTS = {".h5", ".hdf5", ".nxs", ".nx"}
 _IMAGE_EXTS = {".tif", ".tiff", ".edf", ".cbf", ".mar3450", ".img"}
@@ -53,6 +53,8 @@ def _calculate_npt(poni_path: Path, frame_shape: tuple[int, int], mode: str) -> 
     """Calculate radial integration points from beam center to farthest image corner."""
     ai = AzimuthalIntegrator()
     ai.load(str(poni_path))
+    if ai.pixel1 <= 0 or ai.pixel2 <= 0:
+        raise ValueError(f"Invalid pixel size in {poni_path}: pixel1={ai.pixel1}, pixel2={ai.pixel2}")
     center_y = ai.poni1 / ai.pixel1
     center_x = ai.poni2 / ai.pixel2
     h, w = frame_shape
@@ -103,7 +105,10 @@ def _read_frame(path: Path) -> np.ndarray:
     """Read a single 2D detector frame from .npy or any fabio-supported format."""
     if path.suffix.lower() in _NPY_EXTS:
         return np.load(path)
-    return fabio.open(str(path)).data
+    try:
+        return fabio.open(str(path)).data
+    except Exception as e:
+        raise ValueError(f"Failed to read frame from {path}: {e}") from e
 
 
 def _load_input(path: Path, h5_dataset: str | None = None) -> tuple[np.ndarray, list[str], list[Path]]:
@@ -160,6 +165,8 @@ def _load_input(path: Path, h5_dataset: str | None = None) -> tuple[np.ndarray, 
 def _load_mask(path: Path | None) -> np.ndarray | None:
     if path is None:
         return None
+    if path.suffix.lower() != ".npy":
+        raise ValueError(f"Mask must be a .npy file, got {path.suffix!r}")
     mask = np.load(path).astype(bool)
     if mask.ndim != 2:
         raise ValueError(f"Mask .npy must be 2D, got shape {mask.shape}")
@@ -167,7 +174,7 @@ def _load_mask(path: Path | None) -> np.ndarray | None:
     return mask
 
 
-def _write_h5_nexus(source: Path, group_list: list, mode: str, unit: str) -> None:
+def _write_h5_nexus(source: Path, group_list: Sequence[tuple[Pattern | Cake, str, Path]], mode: str, unit: str) -> None:
     """Write integration results back into an HDF5 file following the NeXus convention."""
     axis_name, axis_units = _RADIAL_AXIS.get(unit, ("radial", unit))
     radial = group_list[0][0].radial
@@ -198,7 +205,7 @@ def _write_h5_nexus(source: Path, group_list: list, mode: str, unit: str) -> Non
             ds = nxdata.create_dataset("intensity", data=intensity if multi_frame else intensity[0])
             ds.attrs["units"] = "counts"
         else:
-            azimuthal = group_list[0][0].azimuthal
+            azimuthal = cast(Cake, group_list[0][0]).azimuthal
             chi_idx, radial_idx = (1, 2) if multi_frame else (0, 1)
             nxdata.attrs["axes"] = ["chi", axis_name] if not multi_frame else [".", "chi", axis_name]
             nxdata.attrs["chi_indices"] = [chi_idx]

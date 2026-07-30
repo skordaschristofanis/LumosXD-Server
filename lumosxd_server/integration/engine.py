@@ -105,6 +105,7 @@ class AzimuthalEngine:
         return self._npt_azim
 
     def set_mask(self, mask: np.ndarray | None) -> None:
+        """Set or clear the pixel mask. Call before warmup — changing the mask after warmup does not rebuild lookup tables."""
         self._mask = mask
 
     def warmup(self, shape: tuple[int, ...], dim: str = "1d") -> None:
